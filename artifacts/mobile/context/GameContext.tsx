@@ -281,7 +281,8 @@ function buildPostFlopAnalysis(
   const boardTexture = analyzeBoardTexture(board);
   const { hand: madeHand, rank: madeHandRank } = evaluateMadeHand(heroCards, board);
   const cbet = getCbetRecommendation(boardTexture.texture, madeHandRank, heroIsAggressor, facingBet);
-  const potOddsPct = facingBet ? calcPotOdds(villainOpenAction.betBB, potBB) : 0;
+  // potBB already includes villain's bet — subtract it back to get pot before call
+  const potOddsPct = facingBet ? calcPotOdds(villainOpenAction.betBB, potBB - villainOpenAction.betBB) : 0;
   const betBB = Math.round((betPct / 100) * potBB * 10) / 10;
   const mistakes: MistakeType[] = [];
 
