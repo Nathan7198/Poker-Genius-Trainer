@@ -229,18 +229,19 @@ export default function PlayScreen() {
           </View>
         )}
 
-        {/* Showdown result — compact strip below the table */}
-        {isShowdown && (
+      </ScrollView>
+
+      {/* Showdown footer — always fully visible, no scrolling needed */}
+      {isShowdown && (
+        <View style={[styles.sdFooter, { borderTopColor: colors.border }]}>
+          {/* Winner badge + hand names */}
           <View style={styles.sdResultSection}>
-            {/* Winner badge */}
             {resultConfig && (
               <View style={[styles.sdWinBadge, { backgroundColor: resultConfig.bg, borderColor: resultConfig.color + '60' }]}>
                 <Text style={[styles.sdWinLabel, { color: resultConfig.color }]}>{resultConfig.label}</Text>
                 <Text style={[styles.sdWinSub, { color: colors.mutedForeground }]}>{resultConfig.sublabel}</Text>
               </View>
             )}
-
-            {/* Hand name comparison */}
             {state.heroCards.length === 2 && (
               <View style={[styles.sdHandRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <View style={styles.sdHandItem}>
@@ -275,20 +276,17 @@ export default function PlayScreen() {
               </View>
             )}
           </View>
-        )}
 
-      </ScrollView>
-
-      {/* NEXT HAND — inline sibling of ScrollView, always visible at showdown */}
-      {isShowdown && (
-        <View style={styles.nextHandBar}>
-          <TouchableOpacity
-            style={[styles.nextHandFixed, { backgroundColor: colors.gold }]}
-            onPress={handleNewHand}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.nextHandFixedText}>NEXT HAND →</Text>
-          </TouchableOpacity>
+          {/* Next hand button */}
+          <View style={styles.nextHandBar}>
+            <TouchableOpacity
+              style={[styles.nextHandFixed, { backgroundColor: colors.gold }]}
+              onPress={handleNewHand}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.nextHandFixedText}>NEXT HAND →</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       )}
 
@@ -339,7 +337,8 @@ const styles = StyleSheet.create({
   resultBannerLabel: { fontSize: 22, fontWeight: '900', letterSpacing: 1 },
   resultBannerSub: { fontSize: 13, fontWeight: '600' },
 
-  // Compact showdown result strip (below table)
+  // Showdown footer (outside ScrollView — always fully visible)
+  sdFooter: { borderTopWidth: 1, paddingTop: 2 },
   sdResultSection: { paddingHorizontal: 14, paddingTop: 10, paddingBottom: 4, gap: 8 },
   sdWinBadge: {
     borderRadius: 12, borderWidth: 1.5,
