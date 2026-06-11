@@ -448,9 +448,20 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       const betBB = Math.round((betPct / 100) * state.pot * 10) / 10;
       const callBB = state.villainPostFlopAction?.betBB ?? 0;
       let newPot = state.pot;
-      if (heroAction === 'bet') newPot += betBB;
-      else if (heroAction === 'call') newPot += callBB;
-      else if (heroAction === 'raise') newPot += betBB;
+      if (heroAction === 'bet') {
+        // Hero bets, then villain responds — add both sides
+        newPot += betBB;
+        if (resolvedVillainAction.betBB > 0) newPot += resolvedVillainAction.betBB;
+      } else if (heroAction === 'raise') {
+        newPot += betBB;
+        if (resolvedVillainAction.betBB > 0) newPot += resolvedVillainAction.betBB;
+      } else if (heroAction === 'call') {
+        // Villain bet callBB first, hero calls — both bets go into pot
+        newPot += callBB * 2;
+      } else if (heroAction === 'check') {
+        // Villain may bet after hero checks — add their bet to pot
+        if (resolvedVillainAction.betBB > 0) newPot += resolvedVillainAction.betBB;
+      }
 
       const newHistory = [...state.postFlopAnalysisHistory, pfa];
 

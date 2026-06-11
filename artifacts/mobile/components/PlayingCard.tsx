@@ -13,9 +13,9 @@ interface PlayingCardProps {
 
 export default function PlayingCard({ card, size = 'md', faceDown }: PlayingCardProps) {
   const dims = {
-    sm: { width:28, height:38, rankSize:10, suitSize:9, radius:4, pTop:2, pSide:3 },
-    md: { width:38, height:52, rankSize:14, suitSize:13, radius:6, pTop:3, pSide:4 },
-    lg: { width:54, height:74, rankSize:20, suitSize:18, radius:8, pTop:4, pSide:6 },
+    sm: { width:28, height:38, rankSize:9,  suitSize:8,  radius:4, pad:2 },
+    md: { width:38, height:52, rankSize:12, suitSize:10, radius:6, pad:3 },
+    lg: { width:54, height:74, rankSize:16, suitSize:14, radius:8, pad:4 },
   }[size];
 
   if (faceDown || !card?.faceUp) {
@@ -41,17 +41,32 @@ export default function PlayingCard({ card, size = 'md', faceDown }: PlayingCard
   return (
     <View style={[styles.card, {
       width: dims.width, height: dims.height, borderRadius: dims.radius,
-      paddingTop: dims.pTop, paddingHorizontal: dims.pSide,
     }]}>
-      <Text style={[styles.rankTop, { fontSize: dims.rankSize, color: textColor }]} numberOfLines={1}>
-        {card.rank}
-      </Text>
-      <Text style={[styles.suitCenter, { fontSize: dims.suitSize * 1.4, color: textColor }]}>
-        {suitSym}
-      </Text>
-      <Text style={[styles.rankBottom, { fontSize: dims.rankSize, color: textColor }]} numberOfLines={1}>
-        {card.rank}
-      </Text>
+      {/* Top-left corner: rank, then suit below */}
+      <View style={[styles.corner, { top: dims.pad, left: dims.pad }]}>
+        <Text
+          style={{ fontSize: dims.rankSize, color: textColor, fontWeight: '800', lineHeight: dims.rankSize * 1.1 }}
+          numberOfLines={1}
+        >
+          {card.rank}
+        </Text>
+        <Text style={{ fontSize: dims.suitSize, color: textColor, lineHeight: dims.suitSize, marginTop: -1 }}>
+          {suitSym}
+        </Text>
+      </View>
+
+      {/* Bottom-right corner: same layout, rotated 180° */}
+      <View style={[styles.corner, { bottom: dims.pad, right: dims.pad, transform: [{ rotate: '180deg' }] }]}>
+        <Text
+          style={{ fontSize: dims.rankSize, color: textColor, fontWeight: '800', lineHeight: dims.rankSize * 1.1 }}
+          numberOfLines={1}
+        >
+          {card.rank}
+        </Text>
+        <Text style={{ fontSize: dims.suitSize, color: textColor, lineHeight: dims.suitSize, marginTop: -1 }}>
+          {suitSym}
+        </Text>
+      </View>
     </View>
   );
 }
@@ -66,24 +81,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.4,
     shadowRadius: 4,
     elevation: 4,
-    alignItems: 'center',
-    justifyContent: 'space-between',
   },
-  rankTop: {
-    fontWeight: '700',
-    lineHeight: undefined,
-    alignSelf: 'flex-start',
-  },
-  suitCenter: {
+  corner: {
     position: 'absolute',
-    top: '50%',
-    left: '50%',
-    transform: [{ translateX: -10 }, { translateY: -14 }],
-  },
-  rankBottom: {
-    fontWeight: '700',
-    alignSelf: 'flex-end',
-    transform: [{ rotate: '180deg' }],
+    alignItems: 'center',
   },
   backPattern: {
     flex: 1,
