@@ -11,9 +11,10 @@ import {
   MISTAKE_LABELS, MISTAKE_TIPS, STRENGTH_COLORS, POSITION_DESCRIPTIONS,
   MADE_HAND_COLORS, BOARD_TEXTURE_INFO, PLAYER_TYPE_INFO,
 } from '@/constants/pokerData';
+import type { VillainActionType } from '@/context/GameContext';
 
 export default function CoachModal() {
-  const { state, advancePhase, dismissAnalysis } = useGame();
+  const { state, advancePhase, dismissAnalysis, foldToVillainBet } = useGame();
   const { logMistake } = useStats();
   const colors = useColors();
   const { analysis, postFlopAnalysis, showAnalysis, phase, lastHeroAction, mainVillainType } = state;
@@ -50,13 +51,47 @@ export default function CoachModal() {
     }
   }
 
+  function handleFold() {
+    haptic();
+    foldToVillainBet();
+  }
+
   function nextBtnLabel() {
-    if (phase === 'showdown') return 'NEW HAND';
+    if (phase === 'showdown') return 'SEE RESULT';
+    if (isPreflopModal) return 'VIEW FLOP';
+    if (phase === 'flop') return 'CALL — DEAL TURN';
+    if (phase === 'turn') return 'CALL — DEAL RIVER';
+    if (phase === 'river') return 'CALL — SHOWDOWN';
+    return 'CONTINUE';
+  }
+
+  function normalNextBtnLabel() {
+    if (phase === 'showdown') return 'SEE RESULT';
     if (isPreflopModal) return 'VIEW FLOP';
     if (phase === 'flop') return 'DEAL TURN';
     if (phase === 'turn') return 'DEAL RIVER';
     if (phase === 'river') return 'SHOWDOWN';
     return 'CONTINUE';
+  }
+
+  function villainActionLabel(act: VillainActionType, betPct: number, betBB: number): string {
+    switch (act) {
+      case 'fold':  return 'FOLDED';
+      case 'check': return 'CHECK';
+      case 'call':  return 'CALLED';
+      case 'bet':   return `BET ${betPct}% (${betBB}BB)`;
+      case 'raise': return `RAISED ${betPct}% (${betBB}BB)`;
+    }
+  }
+
+  function villainActionColor(act: VillainActionType): string {
+    switch (act) {
+      case 'fold':  return '#27AE60';
+      case 'check': return colors.mutedForeground;
+      case 'call':  return '#3498DB';
+      case 'bet':   return '#E74C3C';
+      case 'raise': return '#E74C3C';
+    }
   }
 
   // ── POST-FLOP MODAL ────────────────────────────────────────────────────────
@@ -66,6 +101,15 @@ export default function CoachModal() {
     const streetLabel = pf.street.charAt(0).toUpperCase() + pf.street.slice(1);
     const textureInfo = BOARD_TEXTURE_INFO[pf.boardTexture.texture];
     const madeHandColor = MADE_HAND_COLORS[pf.madeHand];
+
+    // Determine if hero checked and villain bet → show Call or Fold buttons
+    const heroCheckedVillainBet =
+      pf.heroAction === 'check' &&
+      (pf.villainAction === 'bet' || pf.villainAction === 'raise') &&
+      phase !== 'showdown';
+
+    // Villain response to hero's bet (if present)
+    const showVillainResponse = pf.villainResponse !== null && pf.villainResponse !== pf.villainAction;
 
     return (
       <Modal transparent animationType="slide" visible>
@@ -104,6 +148,16 @@ export default function CoachModal() {
                 </Text>
               </View>
 
+              {/* Villain bet banner — only show when hero checked and villain bet */}
+              {heroCheckedVillainBet && (
+                <View style={[styles.villainBetBanner, { backgroundColor: '#E74C3C15', borderColor: '#E74C3C40' }]}>
+                  <Feather name="alert-circle" size={14} color="#E74C3C" />
+                  <Text style={[styles.villainBetBannerText, { color: '#E74C3C' }]}>
+                    Villain bet {pf.villainBetPct}% pot ({pf.villainBetBB}BB) — Call or Fold?
+                  </Text>
+                </View>
+              )}
+
               {/* Main advice */}
               <View style={[styles.adviceBox, { backgroundColor: gtoColor + '18', borderColor: gtoColor + '40' }]}>
                 <Text style={[styles.adviceText, { color: colors.foreground }]}>{pf.advice}</Text>
@@ -114,7 +168,20 @@ export default function CoachModal() {
                 <StatCell label="Your Action" value={pf.heroAction.toUpperCase()} color={colors.primary} colors={colors} />
                 <StatCell label="GTO Action" value={pf.gtoAction.toUpperCase()} color={gtoColor} colors={colors} />
                 <StatCell label="Made Hand" value={pf.madeHand} color={madeHandColor} colors={colors} />
-                <StatCell label="Villain" value={pf.villainAction === 'bet' ? `BET ${pf.villainBetPct}%` : 'CHECK'} color={pf.villainAction === 'bet' ? '#E74C3C' : colors.mutedForeground} colors={colors} />
+                <StatCell
+                  label="Villain"
+                  value={villainActionLabel(pf.villainAction, pf.villainBetPct, pf.villainBetBB)}
+                  color={villainActionColor(pf.villainAction)}
+                  colors={colors}
+                />
+                {showVillainResponse && pf.villainResponse && (
+                  <StatCell
+                    label="V. Response"
+                    value={villainActionLabel(pf.villainResponse, pf.villainResponseBetBB > 0 ? Math.round((pf.villainResponseBetBB / (pf.betBB || 1)) * 100) : 0, pf.villainResponseBetBB)}
+                    color={villainActionColor(pf.villainResponse)}
+                    colors={colors}
+                  />
+                )}
                 {pf.heroAction === 'bet' || pf.heroAction === 'raise' ? (
                   <StatCell label="Hero Bet" value={`${pf.betPct}% pot`} color={colors.foreground} colors={colors} />
                 ) : null}
@@ -162,13 +229,32 @@ export default function CoachModal() {
               )}
             </ScrollView>
 
-            <TouchableOpacity
-              style={[styles.nextBtn, { backgroundColor: colors.primary }]}
-              onPress={handleNext}
-            >
-              <Text style={[styles.nextText, { color: colors.primaryForeground }]}>{nextBtnLabel()}</Text>
-              <Feather name="arrow-right" size={16} color={colors.primaryForeground} />
-            </TouchableOpacity>
+            {/* Action buttons */}
+            {heroCheckedVillainBet ? (
+              <View style={styles.twoButtons}>
+                <TouchableOpacity
+                  style={[styles.foldBtn, { backgroundColor: '#E74C3C20', borderColor: '#E74C3C60' }]}
+                  onPress={handleFold}
+                >
+                  <Text style={[styles.foldBtnText, { color: '#E74C3C' }]}>FOLD</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.callBtn, { backgroundColor: colors.primary }]}
+                  onPress={handleNext}
+                >
+                  <Text style={[styles.callBtnText, { color: colors.primaryForeground }]}>{nextBtnLabel()}</Text>
+                  <Feather name="arrow-right" size={16} color={colors.primaryForeground} />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={[styles.nextBtn, { backgroundColor: colors.primary }]}
+                onPress={handleNext}
+              >
+                <Text style={[styles.nextText, { color: colors.primaryForeground }]}>{normalNextBtnLabel()}</Text>
+                <Feather name="arrow-right" size={16} color={colors.primaryForeground} />
+              </TouchableOpacity>
+            )}
           </View>
         </View>
       </Modal>
@@ -269,7 +355,7 @@ export default function CoachModal() {
             style={[styles.nextBtn, { backgroundColor: colors.primary }]}
             onPress={handleNext}
           >
-            <Text style={[styles.nextText, { color: colors.primaryForeground }]}>{nextBtnLabel()}</Text>
+            <Text style={[styles.nextText, { color: colors.primaryForeground }]}>{normalNextBtnLabel()}</Text>
             <Feather name="arrow-right" size={16} color={colors.primaryForeground} />
           </TouchableOpacity>
         </View>
@@ -289,7 +375,7 @@ function StatCell({ label, value, color, colors }: { label: string; value: strin
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.65)' },
-  sheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '82%', paddingBottom: 24 },
+  sheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '84%', paddingBottom: 24 },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1,
@@ -314,12 +400,18 @@ const styles = StyleSheet.create({
   textureCards: { fontSize: 11, flex: 1, textAlign: 'right' },
   textureDesc: { fontSize: 12, lineHeight: 18 },
 
+  villainBetBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    borderRadius: 10, borderWidth: 1, padding: 12, marginBottom: 8,
+  },
+  villainBetBannerText: { fontSize: 13, fontWeight: '700', flex: 1 },
+
   adviceBox: { marginTop: 8, borderRadius: 10, padding: 12, borderWidth: 1, marginBottom: 10 },
   adviceText: { fontSize: 14, lineHeight: 20, fontWeight: '500' },
   statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 4 },
   statCell: { flex: 1, minWidth: 80, borderRadius: 8, padding: 10, alignItems: 'center' },
   statLabel: { fontSize: 9, fontWeight: '700', letterSpacing: 0.5, marginBottom: 3 },
-  statValue: { fontSize: 14, fontWeight: '800', textAlign: 'center' },
+  statValue: { fontSize: 13, fontWeight: '800', textAlign: 'center' },
 
   section: { borderTopWidth: 1, marginTop: 12, paddingTop: 12, marginBottom: 4 },
   sectionTitle: { fontSize: 10, fontWeight: '700', letterSpacing: 1, marginBottom: 6 },
@@ -329,6 +421,21 @@ const styles = StyleSheet.create({
   mistakeTip: { fontSize: 12, lineHeight: 18 },
   exploitBox: { borderRadius: 8, borderWidth: 1, padding: 12 },
   exploitText: { fontSize: 13, lineHeight: 20, fontWeight: '500' },
+
+  twoButtons: {
+    flexDirection: 'row', gap: 10,
+    marginHorizontal: 16, marginTop: 12,
+  },
+  foldBtn: {
+    flex: 1, alignItems: 'center', justifyContent: 'center',
+    paddingVertical: 14, borderRadius: 12, borderWidth: 1.5,
+  },
+  foldBtnText: { fontSize: 15, fontWeight: '800', letterSpacing: 0.5 },
+  callBtn: {
+    flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    paddingVertical: 14, borderRadius: 12,
+  },
+  callBtnText: { fontSize: 14, fontWeight: '800', letterSpacing: 0.3 },
 
   nextBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,

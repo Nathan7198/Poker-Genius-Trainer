@@ -12,10 +12,14 @@ import { useColors } from '@/hooks/useColors';
 import PokerTable from '@/components/PokerTable';
 import ActionPanel from '@/components/ActionPanel';
 import CoachModal from '@/components/CoachModal';
-import { DIFFICULTIES, DIFFICULTY_DESCRIPTIONS, getHandNotation } from '@/constants/pokerData';
+import {
+  DIFFICULTIES, DIFFICULTY_DESCRIPTIONS, getHandNotation,
+  evaluateMadeHand, MADE_HAND_COLORS,
+} from '@/constants/pokerData';
 import type { Difficulty } from '@/constants/pokerData';
 
 const SUIT_SYMBOLS: Record<string, string> = { s: '♠', h: '♥', d: '♦', c: '♣' };
+const SUIT_COLORS: Record<string, string> = { s: '#94A3B8', h: '#EF4444', d: '#EF4444', c: '#94A3B8' };
 
 function cardLabel(rank: string, suit: string) {
   return `${rank}${SUIT_SYMBOLS[suit] ?? suit}`;
@@ -28,10 +32,8 @@ export default function PlayScreen() {
   const insets = useSafeAreaInsets();
   const [showDifficultyPicker, setShowDifficultyPicker] = React.useState(false);
 
-  // Track the last hand number we logged so we never double-log
   const lastLoggedHand = React.useRef<number>(-1);
 
-  // Log hand history when we reach showdown
   React.useEffect(() => {
     if (state.phase !== 'showdown') return;
     if (state.handNumber <= 0) return;
@@ -127,8 +129,30 @@ export default function PlayScreen() {
   const isLive = !isIdle && !isShowdown && !state.showAnalysis;
   const streetBadge = isLive ? ({ preflop: 'PREFLOP', flop: 'FLOP', turn: 'TURN', river: 'RIVER' } as Record<string,string>)[state.phase] ?? null : null;
 
-  // Tab bar is position:absolute — reserve its height so ActionPanel isn't hidden under it
   const TAB_BAR_H = Platform.OS === 'web' ? 84 : 60;
+
+  // ── Showdown display helpers ────────────────────────────────────────────
+  const board = state.communityCards.filter(c => c.faceUp);
+  const mainVillainPlayer = state.players.find(p => p.position === state.mainVillainPosition)
+    ?? state.players[0];
+  const villainFaceUpCards = mainVillainPlayer?.cards.filter(c => c.faceUp) ?? [];
+
+  const heroHandResult = board.length >= 3 && state.heroCards.length === 2
+    ? evaluateMadeHand(state.heroCards, board)
+    : null;
+  const villainHandResult = board.length >= 3 && villainFaceUpCards.length === 2
+    ? evaluateMadeHand(villainFaceUpCards, board)
+    : null;
+
+  const resultConfig = isShowdown && state.showdownResult
+    ? {
+        hero: { label: '🏆 YOU WIN', sublabel: `Pot: ${state.pot.toFixed(1)}BB`, color: '#27AE60', bg: '#27AE6020' },
+        villain: state.villainFolded
+          ? { label: '✓ VILLAIN FOLDED', sublabel: `You win ${state.pot.toFixed(1)}BB`, color: '#27AE60', bg: '#27AE6020' }
+          : { label: '✗ VILLAIN WINS', sublabel: `Pot: ${state.pot.toFixed(1)}BB`, color: '#E74C3C', bg: '#E74C3C20' },
+        tie: { label: '= TIE', sublabel: `Chop: ${(state.pot / 2).toFixed(1)}BB each`, color: '#E5C76B', bg: '#E5C76B20' },
+      }[state.showdownResult]
+    : null;
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background, paddingTop: Platform.OS === 'web' ? insets.top + 10 : 0, paddingBottom: TAB_BAR_H + insets.bottom }]}>
@@ -207,6 +231,61 @@ export default function PlayScreen() {
         {/* Showdown */}
         {isShowdown && (
           <View style={styles.centerActions}>
+            {/* Winner banner */}
+            {resultConfig && (
+              <View style={[styles.resultBanner, { backgroundColor: resultConfig.bg, borderColor: resultConfig.color + '50' }]}>
+                <Text style={[styles.resultBannerLabel, { color: resultConfig.color }]}>{resultConfig.label}</Text>
+                <Text style={[styles.resultBannerSub, { color: colors.mutedForeground }]}>{resultConfig.sublabel}</Text>
+              </View>
+            )}
+
+            {/* Showdown card reveal (when villain didn't fold) */}
+            {!state.villainFolded && villainFaceUpCards.length === 2 && heroHandResult && villainHandResult && (
+              <View style={[styles.showdownCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <Text style={[styles.showdownTitle, { color: colors.mutedForeground }]}>SHOWDOWN</Text>
+                <View style={styles.showdownRow}>
+                  {/* Hero hand */}
+                  <View style={styles.showdownHand}>
+                    <Text style={[styles.showdownPlayer, { color: state.showdownResult === 'hero' ? '#27AE60' : colors.mutedForeground }]}>YOU</Text>
+                    <View style={styles.showdownCards}>
+                      {state.heroCards.map((c, i) => (
+                        <View key={i} style={[styles.sdCard, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
+                          <Text style={[styles.sdCardText, { color: SUIT_COLORS[c.suit] ?? colors.foreground }]}>
+                            {c.rank}{SUIT_SYMBOLS[c.suit] ?? c.suit}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                    <Text style={[styles.showdownHandName, { color: MADE_HAND_COLORS[heroHandResult.hand] }]}>
+                      {heroHandResult.hand}
+                    </Text>
+                  </View>
+
+                  <Text style={[styles.showdownVs, { color: colors.mutedForeground }]}>vs</Text>
+
+                  {/* Villain hand */}
+                  <View style={styles.showdownHand}>
+                    <Text style={[styles.showdownPlayer, { color: state.showdownResult === 'villain' ? '#E74C3C' : colors.mutedForeground }]}>
+                      {mainVillainPlayer?.name ?? 'VILLAIN'}
+                    </Text>
+                    <View style={styles.showdownCards}>
+                      {villainFaceUpCards.map((c, i) => (
+                        <View key={i} style={[styles.sdCard, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
+                          <Text style={[styles.sdCardText, { color: SUIT_COLORS[c.suit] ?? colors.foreground }]}>
+                            {c.rank}{SUIT_SYMBOLS[c.suit] ?? c.suit}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                    <Text style={[styles.showdownHandName, { color: MADE_HAND_COLORS[villainHandResult.hand] }]}>
+                      {villainHandResult.hand}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            )}
+
+            {/* Streets played */}
             {state.postFlopStreetsDone.length > 0 && (
               <View style={[styles.resultCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <Text style={[styles.resultCardTitle, { color: colors.mutedForeground }]}>STREETS PLAYED</Text>
@@ -222,6 +301,7 @@ export default function PlayScreen() {
                 </View>
               </View>
             )}
+
             <TouchableOpacity style={[styles.dealBtn, { backgroundColor: colors.gold }]} onPress={handleNewHand}>
               <Text style={[styles.dealBtnText, { color: '#0D1B0F' }]}>NEXT HAND</Text>
             </TouchableOpacity>
@@ -267,6 +347,31 @@ const styles = StyleSheet.create({
   dealBtn: { paddingVertical: 16, paddingHorizontal: 48, borderRadius: 14, alignItems: 'center' },
   dealBtnText: { fontSize: 18, fontWeight: '900', letterSpacing: 2 },
   idleSubtext: { fontSize: 11, textAlign: 'center', fontStyle: 'italic' },
+
+  resultBanner: {
+    width: '100%', borderRadius: 14, borderWidth: 1.5,
+    paddingVertical: 16, paddingHorizontal: 20, alignItems: 'center', gap: 4,
+  },
+  resultBannerLabel: { fontSize: 22, fontWeight: '900', letterSpacing: 1 },
+  resultBannerSub: { fontSize: 13, fontWeight: '600' },
+
+  showdownCard: {
+    width: '100%', borderRadius: 12, borderWidth: 1,
+    padding: 16, alignItems: 'center', gap: 14,
+  },
+  showdownTitle: { fontSize: 10, fontWeight: '800', letterSpacing: 1.5 },
+  showdownRow: { flexDirection: 'row', alignItems: 'center', gap: 16, width: '100%', justifyContent: 'center' },
+  showdownHand: { alignItems: 'center', gap: 8, flex: 1 },
+  showdownPlayer: { fontSize: 11, fontWeight: '800', letterSpacing: 1 },
+  showdownCards: { flexDirection: 'row', gap: 6 },
+  sdCard: {
+    width: 44, height: 58, borderRadius: 6, borderWidth: 1,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  sdCardText: { fontSize: 16, fontWeight: '900' },
+  showdownHandName: { fontSize: 11, fontWeight: '700', textAlign: 'center' },
+  showdownVs: { fontSize: 12, fontWeight: '600' },
+
   resultCard: { borderRadius: 12, borderWidth: 1, padding: 14, alignItems: 'center', width: '100%' },
   resultCardTitle: { fontSize: 10, fontWeight: '700', letterSpacing: 1, marginBottom: 10 },
   streetsRow: { flexDirection: 'row', gap: 10 },

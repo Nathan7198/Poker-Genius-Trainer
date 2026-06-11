@@ -7,13 +7,15 @@ import {
   getHandStrength, GTO_RANGES, BB_DEFENSE, simulateBotAction,
   THREEBET_VALUE, RANK_VALUES,
   BoardTextureResult, MadeHand, CbetRecommendation,
-  analyzeBoardTexture, evaluateMadeHand, getCbetRecommendation, simulateVillainPostFlop,
+  analyzeBoardTexture, evaluateMadeHand, getCbetRecommendation,
+  simulateVillainPostFlop, evaluateHandWinner,
 } from '@/constants/pokerData';
 
 export type GamePhase = 'idle'|'preflop'|'flop'|'turn'|'river'|'showdown';
 export type HeroAction = 'fold'|'check'|'call'|'raise'|'limp';
 export type PostFlopHeroAction = 'check'|'call'|'fold'|'bet'|'raise';
 export type PostFlopStreet = 'flop'|'turn'|'river';
+export type VillainActionType = 'fold'|'check'|'call'|'bet'|'raise';
 
 export interface BotPlayer {
   id: number;
@@ -60,9 +62,17 @@ export interface PostFlopStreetAnalysis {
   heroAction: PostFlopHeroAction;
   betPct: number;
   betBB: number;
-  villainAction: 'bet'|'check';
+  /** The villain's action that hero was facing / responding to */
+  villainAction: VillainActionType;
   villainBetPct: number;
   villainBetBB: number;
+  /**
+   * Villain's final response AFTER hero's action.
+   * e.g. hero bets → villain raises/calls/folds.
+   * null when there is no further villain action (check-check, hero fold, etc.)
+   */
+  villainResponse: VillainActionType | null;
+  villainResponseBetBB: number;
   cbetRecommendation: CbetRecommendation;
   isGTO: boolean;
   gtoAction: PostFlopHeroAction;
@@ -74,10 +84,12 @@ export interface PostFlopStreetAnalysis {
 }
 
 export interface VillainPostFlopAction {
-  action: 'bet'|'check';
+  action: VillainActionType;
   betPct: number;
   betBB: number;
 }
+
+export type ShowdownResult = 'hero'|'villain'|'tie';
 
 export interface GameState {
   phase: GamePhase;
@@ -107,6 +119,10 @@ export interface GameState {
   postFlopStreetsDone: PostFlopStreet[];
   /** Rolling list of recent flop signatures (rank+suit sorted) — prevents board repeats */
   recentBoardSigs: string[];
+  /** Winner of the current hand (set at showdown) */
+  showdownResult: ShowdownResult | null;
+  /** True when villain folded — hero wins without a showdown */
+  villainFolded: boolean;
 }
 
 type GameAction =
@@ -115,12 +131,13 @@ type GameAction =
   | { type: 'HERO_ACT'; action: HeroAction; raiseBB?: number }
   | { type: 'HERO_POSTFLOP_ACT'; action: PostFlopHeroAction; betPct?: number }
   | { type: 'ADVANCE_PHASE' }
+  | { type: 'FOLD_TO_VILLAIN_BET' }
   | { type: 'DISMISS_ANALYSIS' }
   | { type: 'RESET' };
 
 const PLAYER_NAMES = ['Alex','Jordan','Morgan','Riley','Casey','Taylor','Drew','Quinn'];
 const PLAYER_TYPE_LIST: PlayerType[] = ['TAG','LAG','Nit','Fish','Maniac','TAG','LAG','Nit'];
-const BOARD_SIG_WINDOW = 15; // remember last N flops
+const BOARD_SIG_WINDOW = 15;
 
 function buildInitialState(): GameState {
   return {
@@ -133,6 +150,7 @@ function buildInitialState(): GameState {
     villainPostFlopAction: null, mainVillainType: 'TAG',
     mainVillainPosition: 'BTN', heroActsFirst: false,
     postFlopStreetsDone: [], recentBoardSigs: [],
+    showdownResult: null, villainFolded: false,
   };
 }
 
@@ -141,13 +159,8 @@ function dealCards(deck: Card[], count: number): [Card[], Card[]] {
   return [hand, deck.slice(count)];
 }
 
-/** Canonical signature for 3 flop cards — used to detect repeats */
 function flopSig(cards: Card[]): string {
-  return cards
-    .slice(0, 3)
-    .map(c => `${c.rank}${c.suit}`)
-    .sort()
-    .join('|');
+  return cards.slice(0, 3).map(c => `${c.rank}${c.suit}`).sort().join('|');
 }
 
 function getExploitTipPreflop(villainType: PlayerType): string {
@@ -206,15 +219,12 @@ function buildPreflopAnalysis(
   const inDefense = BB_DEFENSE.has(notation);
   const inThreebet = THREEBET_VALUE.has(notation);
   const mistakes: MistakeType[] = [];
-  // BB can always check when no one has raised — folding preflop for free is always wrong
   const canCheck = heroPosition === 'BB' && !actionCtx.facingRaise;
   let gtoAction: 'raise'|'call'|'fold'|'check' = 'fold';
 
   if (!actionCtx.facingRaise) {
     gtoAction = inRange ? 'raise' : (canCheck ? 'check' : 'fold');
-    // Folding is a mistake when in range OR when BB can check for free
     if (action === 'fold' && (inRange || canCheck)) mistakes.push('folded_too_tight');
-    // Limping only applies to non-BB positions (BB checking is not a limp)
     if (action === 'call' && !canCheck) mistakes.push('limp_utg');
     if ((action === 'raise' || action === 'call') && !inRange) mistakes.push('called_too_loose');
     if (action === 'raise' && raiseBB < 2) mistakes.push('bad_sizing');
@@ -262,14 +272,16 @@ function buildPreflopAnalysis(
 function buildPostFlopAnalysis(
   heroCards: Card[], board: Card[], street: PostFlopStreet,
   heroAction: PostFlopHeroAction, betPct: number, potBB: number,
-  villainAction: VillainPostFlopAction, heroIsAggressor: boolean,
+  villainOpenAction: VillainPostFlopAction,
+  villainResponse: VillainPostFlopAction | null,
+  heroIsAggressor: boolean,
   villainType: PlayerType,
 ): PostFlopStreetAnalysis {
-  const facingBet = villainAction.action === 'bet';
+  const facingBet = villainOpenAction.action === 'bet' || villainOpenAction.action === 'raise';
   const boardTexture = analyzeBoardTexture(board);
   const { hand: madeHand, rank: madeHandRank } = evaluateMadeHand(heroCards, board);
   const cbet = getCbetRecommendation(boardTexture.texture, madeHandRank, heroIsAggressor, facingBet);
-  const potOddsPct = facingBet ? calcPotOdds(villainAction.betBB, potBB) : 0;
+  const potOddsPct = facingBet ? calcPotOdds(villainOpenAction.betBB, potBB) : 0;
   const betBB = Math.round((betPct / 100) * potBB * 10) / 10;
   const mistakes: MistakeType[] = [];
 
@@ -277,17 +289,15 @@ function buildPostFlopAnalysis(
     if (cbet.action === 'bet' && (heroAction === 'check' || heroAction === 'fold') && madeHandRank >= 3) {
       mistakes.push('missed_value');
     }
-    // vs Fish: bluffing is wrong on ALL board textures (they call everything)
     const bluffBadBoard = boardTexture.texture === 'wet' || boardTexture.texture === 'monotone';
     if ((heroAction === 'bet' || heroAction === 'raise') && madeHandRank <= 1 &&
         (villainType === 'Fish' || bluffBadBoard)) {
       mistakes.push('bad_bluff');
     }
   } else {
-    // vs Maniac: folding is wrong even with one pair — they bet too wide
     const foldTooTightThreshold = villainType === 'Maniac' ? 2 : 3;
     if (heroAction === 'fold' && madeHandRank >= foldTooTightThreshold) mistakes.push('folded_too_tight');
-    if ((heroAction === 'call' || heroAction === 'raise') && madeHandRank <= 1 && villainAction.betPct >= 66) {
+    if ((heroAction === 'call' || heroAction === 'raise') && madeHandRank <= 1 && villainOpenAction.betPct >= 66) {
       mistakes.push('ignored_pot_odds');
     }
   }
@@ -304,25 +314,39 @@ function buildPostFlopAnalysis(
   }
 
   const streetLabel = street.charAt(0).toUpperCase() + street.slice(1);
+
+  // Build advice considering villain's response
+  const vr = villainResponse;
+  let villainResponseNote = '';
+  if (vr && heroAction !== 'fold') {
+    if (vr.action === 'fold') villainResponseNote = ` Villain folded — your bet had fold equity.`;
+    else if (vr.action === 'raise') villainResponseNote = ` Villain raised to ${vr.betBB}BB — they had a strong hand here.`;
+    else if (vr.action === 'call') villainResponseNote = ` Villain called.`;
+  }
+
   let advice = '';
   if (isGTO) {
-    advice = `Good ${streetLabel} decision! ${madeHand} on a ${boardTexture.label} board — ${heroAction} is solid.`;
+    advice = `Good ${streetLabel} decision! ${madeHand} on a ${boardTexture.label} board — ${heroAction} is solid.${villainResponseNote}`;
   } else if (mistakes.includes('missed_value')) {
-    advice = `You have ${madeHand} on a ${boardTexture.label} board — betting for value is more profitable. ${cbet.reason}`;
+    advice = `You have ${madeHand} on a ${boardTexture.label} board — betting for value is more profitable. ${cbet.reason}${villainResponseNote}`;
   } else if (mistakes.includes('bad_bluff')) {
-    advice = `Bluffing on a ${boardTexture.label} board with no made hand is high risk. ${cbet.reason}`;
+    advice = `Bluffing on a ${boardTexture.label} board with no made hand is high risk. ${cbet.reason}${villainResponseNote}`;
   } else if (mistakes.includes('folded_too_tight')) {
-    advice = `Folding ${madeHand} to a ${villainAction.betPct}% pot bet is too tight. This hand has enough strength to continue.`;
+    advice = `Folding ${madeHand} to a ${villainOpenAction.betPct}% pot bet is too tight. This hand has enough strength to continue.${villainResponseNote}`;
   } else if (mistakes.includes('ignored_pot_odds')) {
-    advice = `Calling ${villainAction.betPct}% pot with no made hand requires ${potOddsPct}% equity — you likely don't have it.`;
+    advice = `Calling ${villainOpenAction.betPct}% pot with no made hand requires ${potOddsPct}% equity — you likely don't have it.${villainResponseNote}`;
   } else {
-    advice = cbet.reason;
+    advice = cbet.reason + villainResponseNote;
   }
 
   const exploitTip = getExploitTipPostFlop(villainType, heroAction, madeHandRank, facingBet, mistakes);
   return {
     street, boardTexture, madeHand, madeHandRank, heroAction, betPct, betBB,
-    villainAction: villainAction.action, villainBetPct: villainAction.betPct, villainBetBB: villainAction.betBB,
+    villainAction: villainOpenAction.action,
+    villainBetPct: villainOpenAction.betPct,
+    villainBetBB: villainOpenAction.betBB,
+    villainResponse: vr?.action ?? null,
+    villainResponseBetBB: vr?.betBB ?? 0,
     cbetRecommendation: cbet, isGTO, gtoAction, gtoSizingPct, mistakes, advice, exploitTip, heroIsAggressor,
   };
 }
@@ -357,25 +381,15 @@ function getMainVillain(players: BotPlayer[]): BotPlayer {
   return active.find(p => p.type === 'Maniac') ?? active.find(p => p.type === 'LAG') ?? active[0] ?? players[0];
 }
 
+function getMainVillainPlayer(state: GameState): BotPlayer {
+  return state.players.find(p => p.position === state.mainVillainPosition)
+    ?? getMainVillain(state.players);
+}
+
 function revealCommunityCards(cards: Card[], count: number): Card[] {
   let n = 0;
   return cards.map(c => (!c.faceUp && n < count) ? (n++, { ...c, faceUp: true }) : c);
 }
-
-/** Deal one full hand setup, returning hero cards + players + community + deck.
- *  Retries until the flop is not in recentSigs (up to maxTries). */
-function dealUniqueHand(recentSigs: string[], maxTries = 8): {
-  heroCards: Card[];
-  players: BotPlayer[];
-  communityCards: Card[];
-  sig: string;
-  mainVillainType: PlayerType;
-  actionCtx: ActionContext;
-  pot: number;
-  heroPosition: Position;
-  handNumber: number;
-  prevHandNumber: number;
-} | null { return null; } // placeholder — logic is inline in reducer
 
 function gameReducer(state: GameState, action: GameAction): GameState {
   switch (action.type) {
@@ -392,7 +406,6 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       let communityCards: Card[] = [];
       let sig = '';
 
-      // Re-shuffle until we get a unique flop (or exhaust attempts)
       do {
         deck = shuffleDeck(createDeck());
         let [hc, d] = dealCards(deck, 2);
@@ -421,7 +434,6 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         attempts++;
       } while (recentSigs.includes(sig) && attempts < 8);
 
-      // Final deck after dealing
       deck = deck.slice(5);
 
       const faceDown = communityCards.map(c => ({ ...c, faceUp: false }));
@@ -446,12 +458,12 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         mainVillainType, mainVillainPosition, heroActsFirst: false,
         postFlopStreetsDone: [],
         recentBoardSigs: newRecentSigs,
+        showdownResult: null, villainFolded: false,
       };
     }
 
     case 'HERO_ACT': {
       const { action: heroAction, raiseBB = 3 } = action;
-      // When limping (no raise), cost is 0.5BB for SB (completing) or 1BB for other non-BB positions
       const limpCost = state.heroPosition === 'SB' ? 0.5 : 1;
       const callCost = state.actionCtx.facingRaise ? state.actionCtx.raiseAmount : limpCost;
       const heroBet = heroAction === 'raise' ? raiseBB : heroAction === 'call' ? callCost : 0;
@@ -459,19 +471,29 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       const analysis = buildPreflopAnalysis(state.heroCards, state.heroPosition, heroAction, raiseBB, state.actionCtx, state.mainVillainType);
 
       if (heroAction === 'fold') {
-        return { ...state, phase: 'showdown', heroBet, pot: newPot, analysis, showAnalysis: true, lastHeroAction: heroAction, heroIsAggressor: false };
+        return {
+          ...state, phase: 'showdown', heroBet, pot: newPot,
+          analysis, showAnalysis: true, lastHeroAction: heroAction,
+          heroIsAggressor: false, showdownResult: 'villain', villainFolded: false,
+        };
       }
 
       const flopCards = revealCommunityCards(state.communityCards, 3);
       const heroIsAggressor = heroAction === 'raise';
 
-      // Post-flop action order: SB → BB → UTG → HJ → CO → BTN
-      // Hero acts first (is OOP) when hero's post-flop position comes before villain's
       const POSTFLOP_ORDER: Position[] = ['SB','BB','UTG','HJ','CO','BTN'];
       const heroActsFirst = POSTFLOP_ORDER.indexOf(state.heroPosition) < POSTFLOP_ORDER.indexOf(state.mainVillainPosition);
+
+      const villainPlayer = getMainVillainPlayer(state);
+      const visibleBoard = flopCards.filter(c => c.faceUp);
       const villain = heroActsFirst
         ? null
-        : simulateVillainPostFlop(state.mainVillainType, analyzeBoardTexture(flopCards.filter(c => c.faceUp)).texture, newPot);
+        : simulateVillainPostFlop(
+            state.mainVillainType,
+            analyzeBoardTexture(visibleBoard).texture,
+            newPot, 'none',
+            villainPlayer.cards, visibleBoard,
+          );
 
       return {
         ...state,
@@ -481,6 +503,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         showAnalysis: true, lastHeroAction: heroAction,
         heroIsAggressor, villainPostFlopAction: villain, heroActsFirst,
         postFlopStreetsDone: [],
+        showdownResult: null, villainFolded: false,
       };
     }
 
@@ -488,79 +511,185 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       const { action: heroAction, betPct = 0 } = action;
       const street = state.phase as PostFlopStreet;
       const board = state.communityCards.filter(c => c.faceUp);
+      const betBB = Math.round((betPct / 100) * state.pot * 10) / 10;
 
-      // When hero acts first (OOP), simulate villain's RESPONSE after hero's action.
-      // When villain acted first (IP), use the pre-computed villain action.
-      const resolvedVillainAction = state.heroActsFirst
-        ? simulateVillainPostFlop(state.mainVillainType, analyzeBoardTexture(board).texture, state.pot)
-        : (state.villainPostFlopAction ?? { action: 'check' as const, betPct: 0, betBB: 0 });
+      // Get villain's cards for realistic simulation
+      const villainPlayer = getMainVillainPlayer(state);
+      const villainCards = villainPlayer.cards;
 
+      // ── Determine villain actions ───────────────────────────────────────
+      // villainOpenAction: what villain did BEFORE hero's current action (or check if hero acts first)
+      const villainOpenAction: VillainPostFlopAction =
+        state.heroActsFirst
+          ? { action: 'check', betPct: 0, betBB: 0 }
+          : (state.villainPostFlopAction ?? { action: 'check', betPct: 0, betBB: 0 });
+
+      // villainFinalResponse: villain's reaction to hero's action
+      let villainFinalResponse: VillainPostFlopAction;
+
+      if (heroAction === 'fold') {
+        // Hero folded — no villain response needed
+        villainFinalResponse = villainOpenAction;
+      } else if (state.heroActsFirst) {
+        // Hero acts first → villain responds to hero's action
+        villainFinalResponse = simulateVillainPostFlop(
+          state.mainVillainType,
+          analyzeBoardTexture(board).texture,
+          state.pot,
+          heroAction as 'none'|'check'|'bet'|'raise',
+          villainCards, board,
+        );
+      } else if (heroAction === 'raise') {
+        // Villain opened, hero raised → simulate villain's response to the raise
+        villainFinalResponse = simulateVillainPostFlop(
+          state.mainVillainType,
+          analyzeBoardTexture(board).texture,
+          state.pot + betBB,
+          'raise',
+          villainCards, board,
+        );
+      } else {
+        // Hero called / checked facing villain's action — street is over, no further response
+        villainFinalResponse = villainOpenAction;
+      }
+
+      const villainFolded = villainFinalResponse.action === 'fold';
+
+      // ── Pot calculation ─────────────────────────────────────────────────
+      const callBB = state.villainPostFlopAction?.betBB ?? 0;
+      let newPot = state.pot;
+
+      if (heroAction === 'bet' || heroAction === 'raise') {
+        newPot += betBB;
+        if (villainFinalResponse.action === 'call') {
+          newPot += betBB; // villain matches hero's bet
+        } else if (villainFinalResponse.action === 'raise') {
+          // villain raised — add villain's raise + hero implicitly calls the difference
+          newPot += villainFinalResponse.betBB;
+          newPot += Math.max(0, villainFinalResponse.betBB - betBB);
+        }
+        // fold: villain adds nothing beyond hero's bet
+      } else if (heroAction === 'call') {
+        newPot += callBB * 2;
+      } else if (heroAction === 'check') {
+        if (villainFinalResponse.betBB > 0) newPot += villainFinalResponse.betBB;
+      }
+
+      // ── Build analysis ──────────────────────────────────────────────────
       const pfa = buildPostFlopAnalysis(
         state.heroCards, board, street, heroAction, betPct, state.pot,
-        resolvedVillainAction,
+        villainOpenAction,
+        villainFinalResponse.action !== villainOpenAction.action ? villainFinalResponse : null,
         state.heroIsAggressor,
         state.mainVillainType,
       );
 
-      const betBB = Math.round((betPct / 100) * state.pot * 10) / 10;
-      const callBB = state.villainPostFlopAction?.betBB ?? 0;
-      let newPot = state.pot;
-      if (heroAction === 'bet') {
-        // Hero bets, then villain responds — add both sides
-        newPot += betBB;
-        if (resolvedVillainAction.betBB > 0) newPot += resolvedVillainAction.betBB;
-      } else if (heroAction === 'raise') {
-        newPot += betBB;
-        if (resolvedVillainAction.betBB > 0) newPot += resolvedVillainAction.betBB;
-      } else if (heroAction === 'call') {
-        // Villain bet callBB first, hero calls — both bets go into pot
-        newPot += callBB * 2;
-      } else if (heroAction === 'check') {
-        // Villain may bet after hero checks — add their bet to pot
-        if (resolvedVillainAction.betBB > 0) newPot += resolvedVillainAction.betBB;
-      }
-
       const newHistory = [...state.postFlopAnalysisHistory, pfa];
 
+      // ── End-of-hand transitions ─────────────────────────────────────────
       if (heroAction === 'fold') {
         return {
           ...state, phase: 'showdown', pot: newPot,
           postFlopAnalysis: pfa, postFlopAnalysisHistory: newHistory,
-          villainPostFlopAction: resolvedVillainAction,
+          villainPostFlopAction: villainOpenAction,
           showAnalysis: true,
           postFlopStreetsDone: [...state.postFlopStreetsDone, street],
+          showdownResult: 'villain', villainFolded: false,
+        };
+      }
+
+      if (villainFolded) {
+        // Hero's bet forced villain out — hero wins the pot
+        return {
+          ...state, phase: 'showdown', pot: newPot,
+          postFlopAnalysis: pfa, postFlopAnalysisHistory: newHistory,
+          villainPostFlopAction: villainFinalResponse,
+          showAnalysis: true,
+          postFlopStreetsDone: [...state.postFlopStreetsDone, street],
+          showdownResult: 'hero', villainFolded: true,
         };
       }
 
       return {
         ...state, pot: newPot,
         postFlopAnalysis: pfa, postFlopAnalysisHistory: newHistory,
-        villainPostFlopAction: resolvedVillainAction,
+        villainPostFlopAction: villainFinalResponse,
         showAnalysis: true,
         postFlopStreetsDone: [...state.postFlopStreetsDone, street],
       };
     }
 
+    case 'FOLD_TO_VILLAIN_BET': {
+      // Hero folds after seeing villain bet in the analysis modal
+      const vBet = state.postFlopAnalysis?.villainBetBB ?? 0;
+      return {
+        ...state,
+        phase: 'showdown',
+        showAnalysis: false,
+        showdownResult: 'villain',
+        villainFolded: false,
+        pot: state.pot + vBet, // villain's uncalled bet stays in pot (simplified)
+        postFlopStreetsDone: state.postFlopStreetsDone,
+      };
+    }
+
     case 'ADVANCE_PHASE': {
+      const villainPlayer = getMainVillainPlayer(state);
+      const villainCards = villainPlayer.cards;
       const clearedPlayers = state.players.map(p => ({ ...p, action: null }));
+
       if (state.phase === 'flop') {
         const turnCards = revealCommunityCards(state.communityCards, 1);
         const board = turnCards.filter(c => c.faceUp);
         const villain = state.heroActsFirst
           ? null
-          : simulateVillainPostFlop(state.mainVillainType, analyzeBoardTexture(board).texture, state.pot);
-        return { ...state, players: clearedPlayers, phase: 'turn', communityCards: turnCards, postFlopAnalysis: null, showAnalysis: false, villainPostFlopAction: villain };
+          : simulateVillainPostFlop(
+              state.mainVillainType, analyzeBoardTexture(board).texture,
+              state.pot, 'none', villainCards, board,
+            );
+        return {
+          ...state, players: clearedPlayers, phase: 'turn',
+          communityCards: turnCards, postFlopAnalysis: null,
+          showAnalysis: false, villainPostFlopAction: villain,
+        };
       }
+
       if (state.phase === 'turn') {
         const riverCards = state.communityCards.map(c => ({ ...c, faceUp: true }));
+        const board = riverCards.filter(c => c.faceUp);
         const villain = state.heroActsFirst
           ? null
-          : simulateVillainPostFlop(state.mainVillainType, analyzeBoardTexture(riverCards).texture, state.pot);
-        return { ...state, players: clearedPlayers, phase: 'river', communityCards: riverCards, postFlopAnalysis: null, showAnalysis: false, villainPostFlopAction: villain };
+          : simulateVillainPostFlop(
+              state.mainVillainType, analyzeBoardTexture(board).texture,
+              state.pot, 'none', villainCards, board,
+            );
+        return {
+          ...state, players: clearedPlayers, phase: 'river',
+          communityCards: riverCards, postFlopAnalysis: null,
+          showAnalysis: false, villainPostFlopAction: villain,
+        };
       }
+
       if (state.phase === 'river') {
-        return { ...state, players: clearedPlayers, phase: 'showdown', showAnalysis: false, postFlopAnalysis: null };
+        // Reveal main villain's cards + evaluate the winner
+        const board = state.communityCards.filter(c => c.faceUp);
+        const revealedPlayers = state.players.map(p =>
+          p.position === state.mainVillainPosition
+            ? { ...p, cards: p.cards.map(c => ({ ...c, faceUp: true })) }
+            : p
+        );
+        const showdownResult = evaluateHandWinner(state.heroCards, villainPlayer.cards, board);
+        return {
+          ...state,
+          players: revealedPlayers,
+          phase: 'showdown',
+          showAnalysis: false,
+          postFlopAnalysis: null,
+          showdownResult,
+          villainFolded: false,
+        };
       }
+
       return state;
     }
 
@@ -568,7 +697,12 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       return { ...state, showAnalysis: false };
 
     case 'RESET':
-      return { ...buildInitialState(), difficulty: state.difficulty, handNumber: state.handNumber, recentBoardSigs: state.recentBoardSigs };
+      return {
+        ...buildInitialState(),
+        difficulty: state.difficulty,
+        handNumber: state.handNumber,
+        recentBoardSigs: state.recentBoardSigs,
+      };
 
     default:
       return state;
@@ -582,6 +716,7 @@ interface GameContextType {
   heroAct: (action: HeroAction, raiseBB?: number) => void;
   heroPostFlopAct: (action: PostFlopHeroAction, betPct?: number) => void;
   advancePhase: () => void;
+  foldToVillainBet: () => void;
   dismissAnalysis: () => void;
 }
 
@@ -594,10 +729,11 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const heroAct = useCallback((a: HeroAction, raiseBB?: number) => dispatch({ type: 'HERO_ACT', action: a, raiseBB }), []);
   const heroPostFlopAct = useCallback((a: PostFlopHeroAction, betPct?: number) => dispatch({ type: 'HERO_POSTFLOP_ACT', action: a, betPct }), []);
   const advancePhase = useCallback(() => dispatch({ type: 'ADVANCE_PHASE' }), []);
+  const foldToVillainBet = useCallback(() => dispatch({ type: 'FOLD_TO_VILLAIN_BET' }), []);
   const dismissAnalysis = useCallback(() => dispatch({ type: 'DISMISS_ANALYSIS' }), []);
 
   return (
-    <GameContext.Provider value={{ state, setDifficulty, startNewHand, heroAct, heroPostFlopAct, advancePhase, dismissAnalysis }}>
+    <GameContext.Provider value={{ state, setDifficulty, startNewHand, heroAct, heroPostFlopAct, advancePhase, foldToVillainBet, dismissAnalysis }}>
       {children}
     </GameContext.Provider>
   );

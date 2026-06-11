@@ -46,7 +46,9 @@ export default function ActionPanel() {
     ? evaluateMadeHand(heroCards, board)
     : null;
   const boardTexture = isPostFlop && board.length >= 3 ? analyzeBoardTexture(board) : null;
-  const facingVillainBet = isPostFlop && villainPostFlopAction?.action === 'bet';
+  // 'bet' is the only opening action villain can take (raise/fold/call are responses to hero)
+  const facingVillainBet = isPostFlop &&
+    (villainPostFlopAction?.action === 'bet' || villainPostFlopAction?.action === 'raise');
   const cbetRec = isPostFlop && boardTexture && madeHandResult
     ? getCbetRecommendation(boardTexture.texture, madeHandResult.rank, heroIsAggressor, facingVillainBet ?? false)
     : null;

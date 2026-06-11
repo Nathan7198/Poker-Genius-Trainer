@@ -451,23 +451,120 @@ export function getCbetRecommendation(
   }
 }
 
+// ── Villain Post-Flop Simulation (hand-aware) ──────────────────────────────
+
+/**
+ * Simulate villain's post-flop action.
+ *
+ * heroAction:
+ *   'none'  — villain acts first (no hero action yet)
+ *   'check' — hero checked, villain can bet or check
+ *   'bet'   — hero bet, villain can fold/call/raise
+ *   'raise' — hero raised villain's bet, villain can fold/call
+ */
 export function simulateVillainPostFlop(
   playerType: PlayerType,
   texture: BoardTexture,
   potBB: number,
-): { action: 'bet' | 'check'; betPct: number; betBB: number } {
+  heroAction: 'none' | 'check' | 'bet' | 'raise',
+  villainCards: Card[],
+  board: Card[],
+): { action: 'fold'|'check'|'call'|'bet'|'raise'; betPct: number; betBB: number } {
   const rand = Math.random();
-  const aggrMod = texture === 'wet' ? 1.25 : texture === 'dry' ? 0.7 : 1.0;
-  const freqs: Record<PlayerType, number> = { TAG: 0.38, LAG: 0.62, Nit: 0.18, Fish: 0.28, Maniac: 0.82 };
-  const freq = Math.min(freqs[playerType] * aggrMod, 0.95);
-  if (rand < freq) {
-    const betPct = playerType === 'Maniac' ? 90 + Math.floor(Math.random() * 40) :
-                   playerType === 'Fish'   ? 50 + Math.floor(Math.random() * 30) :
-                   35 + Math.floor(Math.random() * 35);
-    const betBB = Math.round((betPct / 100) * potBB * 10) / 10;
-    return { action: 'bet', betPct, betBB };
+  const handRank = board.length >= 3 ? evaluateMadeHand(villainCards, board).rank : 0;
+  const aggrMod = texture === 'wet' ? 1.2 : texture === 'dry' ? 0.75 : 1.0;
+
+  // ── Villain opens or responds to a check ───────────────────────────────
+  if (heroAction === 'none' || heroAction === 'check') {
+    const baseFreq: Record<PlayerType, number> = {
+      TAG: 0.40, LAG: 0.62, Nit: 0.20, Fish: 0.30, Maniac: 0.82,
+    };
+    const handBonus = handRank >= 4 ? 0.22 : handRank >= 3 ? 0.12 : handRank >= 2 ? 0.04 : -0.06;
+    const freq = Math.min((baseFreq[playerType] + handBonus) * aggrMod, 0.95);
+
+    if (rand < freq) {
+      const betPct =
+        playerType === 'Maniac' ? 90 + Math.floor(Math.random() * 40) :
+        playerType === 'Fish'   ? 50 + Math.floor(Math.random() * 30) :
+        playerType === 'Nit'    ? 55 + Math.floor(Math.random() * 20) :
+        35 + Math.floor(Math.random() * 40);
+      const betBB = Math.max(0.5, Math.round((betPct / 100) * potBB * 10) / 10);
+      return { action: 'bet', betPct, betBB };
+    }
+    return { action: 'check', betPct: 0, betBB: 0 };
   }
-  return { action: 'check', betPct: 0, betBB: 0 };
+
+  // ── Villain responds to hero bet or raise ───────────────────────────────
+  const rankBucket: 0|1|2|3 = handRank <= 1 ? 0 : handRank === 2 ? 1 : handRank === 3 ? 2 : 3;
+
+  const foldTable: Record<PlayerType, [number, number, number, number]> = {
+    Fish:   [0.00, 0.00, 0.00, 0.00],
+    Maniac: [0.06, 0.03, 0.01, 0.00],
+    Nit:    [0.82, 0.55, 0.22, 0.04],
+    TAG:    [0.72, 0.40, 0.12, 0.02],
+    LAG:    [0.52, 0.22, 0.06, 0.00],
+  };
+  const raiseTable: Record<PlayerType, [number, number, number, number]> = {
+    Fish:   [0.02, 0.03, 0.06, 0.10],
+    Maniac: [0.28, 0.40, 0.55, 0.70],
+    Nit:    [0.00, 0.00, 0.08, 0.30],
+    TAG:    [0.00, 0.05, 0.18, 0.40],
+    LAG:    [0.05, 0.12, 0.28, 0.52],
+  };
+
+  let foldProb = foldTable[playerType][rankBucket];
+  let raiseProb = raiseTable[playerType][rankBucket];
+
+  // Facing a re-raise: fold more, almost never 3-bet
+  if (heroAction === 'raise') {
+    foldProb = Math.min(foldProb * 1.5, 0.95);
+    raiseProb = 0; // no 3-bet for simplicity
+  }
+
+  if (rand < foldProb) {
+    return { action: 'fold', betPct: 0, betBB: 0 };
+  }
+
+  if (heroAction === 'bet' && rand < foldProb + raiseProb) {
+    const raisePct =
+      playerType === 'Maniac' ? 120 + Math.floor(Math.random() * 30) :
+      playerType === 'LAG'    ? 90  + Math.floor(Math.random() * 30) :
+      75 + Math.floor(Math.random() * 25);
+    const raiseBB = Math.max(1, Math.round((raisePct / 100) * potBB * 10) / 10);
+    return { action: 'raise', betPct: raisePct, betBB: raiseBB };
+  }
+
+  return { action: 'call', betPct: 0, betBB: 0 };
+}
+
+// ── Showdown Hand Comparison ───────────────────────────────────────────────
+
+/**
+ * Compare hero and villain hands after the river.
+ * Returns 'hero', 'villain', or 'tie'.
+ * Uses rank-first comparison then high-card tiebreak (approximate but correct ~95% of the time).
+ */
+export function evaluateHandWinner(
+  heroCards: Card[],
+  villainCards: Card[],
+  board: Card[],
+): 'hero' | 'villain' | 'tie' {
+  const heroResult = evaluateMadeHand(heroCards, board);
+  const villainResult = evaluateMadeHand(villainCards, board);
+
+  if (heroResult.rank > villainResult.rank) return 'hero';
+  if (villainResult.rank > heroResult.rank) return 'villain';
+
+  // Same hand category — compare best 5 cards by value (approximation)
+  const heroVals = [...heroCards, ...board].map(c => RANK_VALUES[c.rank]).sort((a,b) => b-a);
+  const villainVals = [...villainCards, ...board].map(c => RANK_VALUES[c.rank]).sort((a,b) => b-a);
+  for (let i = 0; i < 5; i++) {
+    const h = heroVals[i] ?? 0;
+    const v = villainVals[i] ?? 0;
+    if (h > v) return 'hero';
+    if (v > h) return 'villain';
+  }
+  return 'tie';
 }
 
 // ── Preflop Action Simulation for Bots ────────────────────────────────────
