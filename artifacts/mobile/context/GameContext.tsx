@@ -465,9 +465,16 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 
     case 'HERO_ACT': {
       const { action: heroAction, raiseBB = 3 } = action;
-      const limpCost = state.heroPosition === 'SB' ? 0.5 : 1;
-      const callCost = state.actionCtx.facingRaise ? state.actionCtx.raiseAmount : limpCost;
-      const heroBet = heroAction === 'raise' ? raiseBB : heroAction === 'call' ? callCost : 0;
+      // How much hero has already committed as a blind (pot already includes this)
+      const heroAlreadyIn = state.heroPosition === 'BB' ? 1 : state.heroPosition === 'SB' ? 0.5 : 0;
+      // Total amount needed to call (full BB sizing, not extra)
+      const callTotal = state.actionCtx.facingRaise ? state.actionCtx.raiseAmount : 1;
+      // heroBet = extra chips hero adds (total - already posted)
+      const heroBet = heroAction === 'raise'
+        ? Math.max(0, raiseBB - heroAlreadyIn)
+        : heroAction === 'call'
+          ? Math.max(0, callTotal - heroAlreadyIn)
+          : 0;
       let preflopPot = state.pot + heroBet;
 
       // ── Simulate remaining preflop actors after hero ───────────────────
