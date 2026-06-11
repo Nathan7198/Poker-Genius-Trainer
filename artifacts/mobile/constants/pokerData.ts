@@ -540,27 +540,95 @@ export function simulateVillainPostFlop(
 // ── Showdown Hand Comparison ───────────────────────────────────────────────
 
 /**
- * Compare hero and villain hands after the river.
- * Returns 'hero', 'villain', or 'tie'.
- * Uses rank-first comparison then high-card tiebreak (approximate but correct ~95% of the time).
+ * Compute a numeric score array for lexicographic hand comparison.
+ * Index 0 = hand rank (1-9), subsequent values break ties within that rank.
  */
+function _handScore(holeCards: Card[], board: Card[]): number[] {
+  const all = [...holeCards, ...board];
+  const { rank } = evaluateMadeHand(holeCards, board);
+
+  // Build [(cardValue, count)] sorted by count desc then value desc
+  const cnts: Record<string, number> = {};
+  for (const c of all) cnts[c.rank] = (cnts[c.rank] ?? 0) + 1;
+  const ranked = Object.entries(cnts)
+    .map(([r, n]) => [RANK_VALUES[r as Rank], n] as [number, number])
+    .sort((a, b) => b[1] - a[1] || b[0] - a[0]);
+
+  switch (rank) {
+    case 9: { // Straight Flush — highest straight within flush suit
+      const suitCts: Record<string, number> = {};
+      for (const c of all) suitCts[c.suit] = (suitCts[c.suit] ?? 0) + 1;
+      const fs = Object.entries(suitCts).find(([, n]) => n >= 5)?.[0] ?? '';
+      const sfVals = [...new Set(all.filter(c => c.suit === fs).map(c => RANK_VALUES[c.rank]))];
+      if (sfVals.includes(14)) sfVals.push(1);
+      sfVals.sort((a, b) => b - a);
+      for (let i = 0; i <= sfVals.length - 5; i++) {
+        let ok = true;
+        for (let j = 0; j < 4; j++) if (sfVals[i + j] - sfVals[i + j + 1] !== 1) { ok = false; break; }
+        if (ok) return [rank, sfVals[i]];
+      }
+      return [rank, 0];
+    }
+    case 8: { // Four of a Kind: [8, quad, best-kicker]
+      const quad = ranked[0][0];
+      const kicker = ranked.find(([, n]) => n < 4)?.[0] ?? 0;
+      return [rank, quad, kicker];
+    }
+    case 7: { // Full House: [7, trips-rank, pair-rank]
+      return [rank, ranked[0][0], ranked[1][0]];
+    }
+    case 6: { // Flush: [6, c1, c2, c3, c4, c5] — top 5 of flush suit
+      const suitCts: Record<string, number> = {};
+      for (const c of all) suitCts[c.suit] = (suitCts[c.suit] ?? 0) + 1;
+      const fs = Object.entries(suitCts).find(([, n]) => n >= 5)?.[0] ?? '';
+      const fv = all.filter(c => c.suit === fs).map(c => RANK_VALUES[c.rank]).sort((a, b) => b - a);
+      return [rank, ...fv.slice(0, 5)];
+    }
+    case 5: { // Straight: [5, high-card]
+      const uv = [...new Set(all.map(c => RANK_VALUES[c.rank]))];
+      if (uv.includes(14)) uv.push(1);
+      uv.sort((a, b) => b - a);
+      for (let i = 0; i <= uv.length - 5; i++) {
+        let ok = true;
+        for (let j = 0; j < 4; j++) if (uv[i + j] - uv[i + j + 1] !== 1) { ok = false; break; }
+        if (ok) return [rank, uv[i]];
+      }
+      return [rank, 0];
+    }
+    case 4: { // Three of a Kind: [4, trips, k1, k2]
+      const trips = ranked[0][0];
+      const kickers = ranked.filter(([, n]) => n < 3).map(([v]) => v).slice(0, 2);
+      return [rank, trips, ...kickers];
+    }
+    case 3: { // Two Pair: [3, high-pair, low-pair, kicker]
+      // With 7 cards there can be 3 pairs; pick highest two, kicker from the rest
+      const pairs = ranked.filter(([, n]) => n >= 2).map(([v]) => v).slice(0, 2);
+      const used = new Set(pairs);
+      const kicker = ranked.filter(([v]) => !used.has(v)).map(([v]) => v)[0] ?? 0;
+      return [rank, ...pairs, kicker];
+    }
+    case 2: { // One Pair: [2, pair, k1, k2, k3]
+      const pair = ranked[0][0];
+      const kickers = ranked.filter(([, n]) => n === 1).map(([v]) => v).slice(0, 3);
+      return [rank, pair, ...kickers];
+    }
+    default: { // High Card: [1, c1..c5]
+      return [rank, ...ranked.map(([v]) => v).slice(0, 5)];
+    }
+  }
+}
+
 export function evaluateHandWinner(
   heroCards: Card[],
   villainCards: Card[],
   board: Card[],
 ): 'hero' | 'villain' | 'tie' {
-  const heroResult = evaluateMadeHand(heroCards, board);
-  const villainResult = evaluateMadeHand(villainCards, board);
-
-  if (heroResult.rank > villainResult.rank) return 'hero';
-  if (villainResult.rank > heroResult.rank) return 'villain';
-
-  // Same hand category — compare best 5 cards by value (approximation)
-  const heroVals = [...heroCards, ...board].map(c => RANK_VALUES[c.rank]).sort((a,b) => b-a);
-  const villainVals = [...villainCards, ...board].map(c => RANK_VALUES[c.rank]).sort((a,b) => b-a);
-  for (let i = 0; i < 5; i++) {
-    const h = heroVals[i] ?? 0;
-    const v = villainVals[i] ?? 0;
+  const heroScore = _handScore(heroCards, board);
+  const villainScore = _handScore(villainCards, board);
+  const len = Math.max(heroScore.length, villainScore.length);
+  for (let i = 0; i < len; i++) {
+    const h = heroScore[i] ?? 0;
+    const v = villainScore[i] ?? 0;
     if (h > v) return 'hero';
     if (v > h) return 'villain';
   }

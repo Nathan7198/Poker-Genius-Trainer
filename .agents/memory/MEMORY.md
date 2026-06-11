@@ -1,1 +1,2 @@
 - [Poker Trainer Architecture](poker-trainer-arch.md) — State machine flow for preflop + post-flop streets, key reducer action types.
+- [Hand evaluator tiebreaker bug](hand-evaluator-bug.md) — Old "sort all 7, compare top 5" tiebreaker was wrong; replaced with _handScore typed tuple per hand category.
