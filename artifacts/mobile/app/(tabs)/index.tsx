@@ -204,7 +204,8 @@ export default function PlayScreen() {
       )}
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-        <PokerTable />
+        {/* Hide the table at showdown — compact result view fits in-screen without scrolling */}
+        {!isShowdown && <PokerTable />}
 
         {/* Preflop raise context banner */}
         {state.phase === 'preflop' && state.actionCtx.facingRaise && !state.showAnalysis && (
