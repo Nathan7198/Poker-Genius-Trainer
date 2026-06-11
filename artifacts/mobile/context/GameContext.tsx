@@ -42,7 +42,7 @@ export interface HandAnalysis {
   heroAction: HeroAction;
   raiseAmountBB: number;
   isGTO: boolean;
-  gtoAction: 'raise'|'call'|'fold';
+  gtoAction: 'raise'|'call'|'fold'|'check';
   gtoRaiseSize?: number;
   equity: number;
   potOdds: number;
@@ -160,12 +160,16 @@ function buildPreflopAnalysis(
   const inDefense = BB_DEFENSE.has(notation);
   const inThreebet = THREEBET_VALUE.has(notation);
   const mistakes: MistakeType[] = [];
-  let gtoAction: 'raise'|'call'|'fold' = 'fold';
+  // BB can always check when no one has raised — folding preflop for free is always wrong
+  const canCheck = heroPosition === 'BB' && !actionCtx.facingRaise;
+  let gtoAction: 'raise'|'call'|'fold'|'check' = 'fold';
 
   if (!actionCtx.facingRaise) {
-    gtoAction = inRange ? 'raise' : 'fold';
-    if (action === 'fold' && inRange) mistakes.push('folded_too_tight');
-    if (action === 'call') mistakes.push('limp_utg');
+    gtoAction = inRange ? 'raise' : (canCheck ? 'check' : 'fold');
+    // Folding is a mistake when in range OR when BB can check for free
+    if (action === 'fold' && (inRange || canCheck)) mistakes.push('folded_too_tight');
+    // Limping only applies to non-BB positions (BB checking is not a limp)
+    if (action === 'call' && !canCheck) mistakes.push('limp_utg');
     if ((action === 'raise' || action === 'call') && !inRange) mistakes.push('called_too_loose');
     if (action === 'raise' && raiseBB < 2) mistakes.push('bad_sizing');
   } else {
@@ -180,9 +184,17 @@ function buildPreflopAnalysis(
   const isGTO = mistakes.length === 0;
   let advice = '';
   if (isGTO) {
-    advice = `Correct! ${notation} (${strength}) is the right ${gtoAction} from ${heroPosition}.`;
+    if (gtoAction === 'check') {
+      advice = `Correct! ${notation} from BB — no raise to face, so taking the free flop is the right play.`;
+    } else {
+      advice = `Correct! ${notation} (${strength}) is the right ${gtoAction} from ${heroPosition}.`;
+    }
   } else if (mistakes.includes('folded_too_tight')) {
-    advice = `${notation} is in your GTO range from ${heroPosition}. ${inRange ? 'Open to ~3BB' : 'Defend vs the raise'}.`;
+    if (canCheck) {
+      advice = `Never fold a free check from BB! ${notation} costs nothing to see the flop — always check when there's no raise.`;
+    } else {
+      advice = `${notation} is in your GTO range from ${heroPosition}. ${inRange ? 'Open to ~3BB' : 'Defend vs the raise'}.`;
+    }
   } else if (mistakes.includes('called_too_loose')) {
     advice = `${notation} is outside your profitable ${heroPosition} range. Fold to avoid dominated situations.`;
   } else if (mistakes.includes('limp_utg')) {
