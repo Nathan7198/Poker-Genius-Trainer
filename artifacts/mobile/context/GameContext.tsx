@@ -560,19 +560,26 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       const villainFolded = villainFinalResponse.action === 'fold';
 
       // ── Pot calculation ─────────────────────────────────────────────────
+      // NOTE: state.pot already includes villain's opening bet (baked in when
+      // villainPostFlopAction was set).  All arithmetic below must only add
+      // NEW chips — never re-add the opening bet.
       const callBB = state.villainPostFlopAction?.betBB ?? 0;
+      // How many chips villain already committed this street (already in pot)
+      const villainAlreadyIn = !state.heroActsFirst ? villainOpenAction.betBB : 0;
       let newPot = state.pot;
 
       if (heroAction === 'bet' || heroAction === 'raise') {
-        newPot += betBB;
+        newPot += betBB; // hero's chips
         if (villainFinalResponse.action === 'call') {
-          newPot += betBB; // villain matches hero's bet
+          // Villain calls hero's total bet; they already put villainAlreadyIn in
+          newPot += Math.max(0, betBB - villainAlreadyIn);
         } else if (villainFinalResponse.action === 'raise') {
-          // villain raised — add villain's raise + hero implicitly calls the difference
-          newPot += villainFinalResponse.betBB;
+          // Villain raises to a new total; subtract what they already have in
+          newPot += Math.max(0, villainFinalResponse.betBB - villainAlreadyIn);
+          // Hero implicitly calls back up to villain's raise
           newPot += Math.max(0, villainFinalResponse.betBB - betBB);
         }
-        // fold: villain adds nothing beyond hero's bet
+        // fold: villain adds nothing
       } else if (heroAction === 'call') {
         // Villain's bet is already in state.pot — only add hero's matching call
         newPot += callBB;
