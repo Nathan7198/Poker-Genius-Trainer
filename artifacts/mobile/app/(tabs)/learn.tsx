@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
 import RangeGrid from '@/components/RangeGrid';
+import { useGame } from '@/context/GameContext';
 import {
   POSITIONS, Position, POSITION_LABELS, POSITION_COLORS, POSITION_DESCRIPTIONS,
   PLAYER_TYPE_INFO, PlayerType, DIFFICULTIES, DIFFICULTY_DESCRIPTIONS,
@@ -30,8 +32,20 @@ const POT_ODDS_EXAMPLES = [
 export default function LearnScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const { state } = useGame();
   const [activeTab, setActiveTab] = useState<Tab>('ranges');
   const [selectedPosition, setSelectedPosition] = useState<Position>('BTN');
+
+  // When navigating to this tab during an active hand, jump straight to the
+  // hero's current position in the Ranges view so they can check their range.
+  useFocusEffect(
+    useCallback(() => {
+      if (state.phase !== 'idle') {
+        setActiveTab('ranges');
+        setSelectedPosition(state.heroPosition);
+      }
+    }, [state.phase, state.heroPosition])
+  );
 
   const topPad = Platform.OS === 'web' ? insets.top + 10 : insets.top + 4;
 
