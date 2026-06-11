@@ -255,12 +255,12 @@ export default function PlayScreen() {
               </View>
             )}
 
-            {/* Showdown card reveal (when villain didn't fold) */}
-            {!state.villainFolded && villainFaceUpCards.length === 2 && heroHandResult && villainHandResult && (
+            {/* Hands — hero always shown; villain shows cards if revealed, else FOLDED badge */}
+            {state.heroCards.length === 2 && (
               <View style={[styles.showdownCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <Text style={[styles.showdownTitle, { color: colors.mutedForeground }]}>SHOWDOWN</Text>
+                <Text style={[styles.showdownTitle, { color: colors.mutedForeground }]}>HANDS</Text>
                 <View style={styles.showdownRow}>
-                  {/* Hero hand */}
+                  {/* Hero */}
                   <View style={styles.showdownHand}>
                     <Text style={[styles.showdownPlayer, { color: state.showdownResult === 'hero' ? '#27AE60' : colors.mutedForeground }]}>YOU</Text>
                     <View style={styles.showdownCards}>
@@ -271,29 +271,41 @@ export default function PlayScreen() {
                         </View>
                       ))}
                     </View>
-                    <Text style={[styles.showdownHandName, { color: MADE_HAND_COLORS[heroHandResult.hand] }]}>
-                      {heroHandResult.hand}
-                    </Text>
+                    {heroHandResult && (
+                      <Text style={[styles.showdownHandName, { color: MADE_HAND_COLORS[heroHandResult.hand] }]}>
+                        {heroHandResult.hand}
+                      </Text>
+                    )}
                   </View>
 
                   <Text style={[styles.showdownVs, { color: colors.mutedForeground }]}>vs</Text>
 
-                  {/* Villain hand */}
+                  {/* Villain */}
                   <View style={styles.showdownHand}>
                     <Text style={[styles.showdownPlayer, { color: state.showdownResult === 'villain' ? '#E74C3C' : colors.mutedForeground }]}>
                       {mainVillainPlayer?.name ?? 'VILLAIN'}
                     </Text>
-                    <View style={styles.showdownCards}>
-                      {villainFaceUpCards.map((c, i) => (
-                        <View key={i} style={[styles.sdCard, { backgroundColor: '#FAFAFA', borderColor: '#DDD' }]}>
-                          <Text style={[styles.sdRank, { color: SUIT_COLORS[c.suit] ?? '#000' }]}>{c.rank}</Text>
-                          <Text style={[styles.sdSuit, { color: SUIT_COLORS[c.suit] ?? '#000' }]}>{SUIT_SYMBOLS[c.suit] ?? c.suit}</Text>
+                    {villainFaceUpCards.length === 2 ? (
+                      <>
+                        <View style={styles.showdownCards}>
+                          {villainFaceUpCards.map((c, i) => (
+                            <View key={i} style={[styles.sdCard, { backgroundColor: '#FAFAFA', borderColor: '#DDD' }]}>
+                              <Text style={[styles.sdRank, { color: SUIT_COLORS[c.suit] ?? '#000' }]}>{c.rank}</Text>
+                              <Text style={[styles.sdSuit, { color: SUIT_COLORS[c.suit] ?? '#000' }]}>{SUIT_SYMBOLS[c.suit] ?? c.suit}</Text>
+                            </View>
+                          ))}
                         </View>
-                      ))}
-                    </View>
-                    <Text style={[styles.showdownHandName, { color: MADE_HAND_COLORS[villainHandResult.hand] }]}>
-                      {villainHandResult.hand}
-                    </Text>
+                        {villainHandResult && (
+                          <Text style={[styles.showdownHandName, { color: MADE_HAND_COLORS[villainHandResult.hand] }]}>
+                            {villainHandResult.hand}
+                          </Text>
+                        )}
+                      </>
+                    ) : (
+                      <View style={[styles.foldedBadge, { backgroundColor: '#E74C3C15', borderColor: '#E74C3C50' }]}>
+                        <Text style={[styles.foldedText, { color: '#E74C3C' }]}>FOLDED</Text>
+                      </View>
+                    )}
                   </View>
                 </View>
               </View>
@@ -410,6 +422,8 @@ const styles = StyleSheet.create({
   sdSuit: { fontSize: 13, fontWeight: '700', lineHeight: 15 },
   showdownHandName: { fontSize: 11, fontWeight: '700', textAlign: 'center' },
   showdownVs: { fontSize: 12, fontWeight: '600' },
+  foldedBadge: { borderRadius: 8, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 10, marginTop: 4, alignItems: 'center' },
+  foldedText: { fontSize: 12, fontWeight: '800', letterSpacing: 1 },
 
   resultCard: { borderRadius: 12, borderWidth: 1, padding: 14, alignItems: 'center', width: '100%' },
   resultCardTitle: { fontSize: 10, fontWeight: '700', letterSpacing: 1, marginBottom: 10 },
