@@ -1,0 +1,1 @@
+- [Poker Trainer Architecture](poker-trainer-arch.md) — State machine flow for preflop + post-flop streets, key reducer action types.

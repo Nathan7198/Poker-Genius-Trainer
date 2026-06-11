@@ -252,6 +252,198 @@ export function getGridCell(row: number, col: number): { hand: string; type: 'pa
   return { hand:`${r2}${r1}o`, type:'offsuit' };
 }
 
+// ── Board Texture & Post-Flop Logic ────────────────────────────────────────
+
+export type BoardTexture = 'dry' | 'semiWet' | 'wet' | 'monotone' | 'paired';
+export type MadeHand =
+  | 'High Card' | 'One Pair' | 'Two Pair' | 'Three of a Kind'
+  | 'Straight' | 'Flush' | 'Full House' | 'Four of a Kind' | 'Straight Flush';
+
+export const BOARD_TEXTURE_INFO: Record<BoardTexture, { label: string; description: string; color: string }> = {
+  dry: {
+    label: 'Dry / Rainbow',
+    color: '#27AE60',
+    description: 'Low connectivity, no flush draw. C-bet frequently at ~25-33% pot — you have a range advantage and opponents will fold often.',
+  },
+  semiWet: {
+    label: 'Semi-Wet',
+    color: '#E67E22',
+    description: 'One draw present (flush OR straight). Mix c-bets and checks. Size up with value; check your total misses.',
+  },
+  wet: {
+    label: 'Very Wet',
+    color: '#E74C3C',
+    description: 'Heavy draw board — flush AND straight draws. Bet large with strong hands to deny equity. Check misses — you can be raised off bluffs.',
+  },
+  monotone: {
+    label: 'Monotone',
+    color: '#9B59B6',
+    description: 'All one suit. Check frequently unless you hold the flush. Villain can easily represent a flush against your bets.',
+  },
+  paired: {
+    label: 'Paired Board',
+    color: '#95A5A6',
+    description: 'One rank appears twice. Slight PF-raiser advantage on low pairs. Value bet trips or better; check marginal pairs.',
+  },
+};
+
+export const MADE_HAND_COLORS: Record<MadeHand, string> = {
+  'High Card': '#95A5A6',
+  'One Pair': '#E67E22',
+  'Two Pair': '#F1C40F',
+  'Three of a Kind': '#2ECC71',
+  'Straight': '#1ABC9C',
+  'Flush': '#3498DB',
+  'Full House': '#9B59B6',
+  'Four of a Kind': '#E74C3C',
+  'Straight Flush': '#FFD700',
+};
+
+export interface CbetRecommendation {
+  action: 'bet' | 'check';
+  sizingPct: number;
+  reason: string;
+}
+
+export interface BoardTextureResult {
+  texture: BoardTexture;
+  label: string;
+  description: string;
+  color: string;
+  hasPair: boolean;
+  isMonotone: boolean;
+  hasFlushDraw: boolean;
+  boardRankLabels: string;
+}
+
+function _checkStraight(vals: number[]): boolean {
+  const unique = [...new Set(vals)];
+  if (unique.includes(14)) unique.push(1);
+  unique.sort((a, b) => a - b);
+  let run = 1;
+  for (let i = 1; i < unique.length; i++) {
+    run = unique[i] === unique[i - 1] + 1 ? run + 1 : 1;
+    if (run >= 5) return true;
+  }
+  return false;
+}
+
+export function evaluateMadeHand(holeCards: Card[], board: Card[]): { hand: MadeHand; rank: number } {
+  const all = [...holeCards, ...board];
+  const rankCounts: Record<string, number> = {};
+  const suitCounts: Record<string, number> = {};
+  for (const c of all) {
+    rankCounts[c.rank] = (rankCounts[c.rank] ?? 0) + 1;
+    suitCounts[c.suit] = (suitCounts[c.suit] ?? 0) + 1;
+  }
+  const counts = Object.values(rankCounts).sort((a, b) => b - a);
+  const hasFlush = Object.values(suitCounts).some(v => v >= 5);
+  const hasStraight = _checkStraight(all.map(c => RANK_VALUES[c.rank]));
+
+  if (hasFlush && hasStraight) return { hand: 'Straight Flush', rank: 9 };
+  if (counts[0] === 4) return { hand: 'Four of a Kind', rank: 8 };
+  if (counts[0] === 3 && counts[1] >= 2) return { hand: 'Full House', rank: 7 };
+  if (hasFlush) return { hand: 'Flush', rank: 6 };
+  if (hasStraight) return { hand: 'Straight', rank: 5 };
+  if (counts[0] === 3) return { hand: 'Three of a Kind', rank: 4 };
+  if (counts[0] === 2 && counts[1] === 2) return { hand: 'Two Pair', rank: 3 };
+  if (counts[0] === 2) return { hand: 'One Pair', rank: 2 };
+  return { hand: 'High Card', rank: 1 };
+}
+
+export function analyzeBoardTexture(board: Card[]): BoardTextureResult {
+  const fallback: BoardTextureResult = {
+    texture: 'dry', label: 'Dry', description: BOARD_TEXTURE_INFO.dry.description,
+    color: '#27AE60', hasPair: false, isMonotone: false, hasFlushDraw: false, boardRankLabels: '',
+  };
+  if (board.length < 3) return fallback;
+
+  const suits = board.map(c => c.suit);
+  const ranks = board.map(c => c.rank);
+  const uniqueSuits = new Set(suits);
+  const uniqueRanks = new Set(ranks);
+  const isMonotone = uniqueSuits.size === 1;
+  const hasPair = uniqueRanks.size < board.length;
+
+  let hasFlushDraw = false;
+  if (!isMonotone) {
+    for (const s of Array.from(uniqueSuits)) {
+      if (suits.filter(x => x === s).length >= 2) { hasFlushDraw = true; break; }
+    }
+  }
+
+  const rankVals = board.slice(0, 3).map(c => RANK_VALUES[c.rank]).sort((a, b) => a - b);
+  const spread = rankVals[rankVals.length - 1] - rankVals[0];
+  const isConnected = spread <= 4;
+
+  let texture: BoardTexture;
+  if (isMonotone) texture = 'monotone';
+  else if (hasPair) texture = 'paired';
+  else if (isConnected && hasFlushDraw) texture = 'wet';
+  else if (isConnected || hasFlushDraw) texture = 'semiWet';
+  else texture = 'dry';
+
+  const info = BOARD_TEXTURE_INFO[texture];
+  const boardRankLabels = board.map(c => c.rank + c.suit).join(' ');
+  return { texture, label: info.label, description: info.description, color: info.color, hasPair, isMonotone, hasFlushDraw, boardRankLabels };
+}
+
+export function getCbetRecommendation(
+  texture: BoardTexture,
+  madeHandRank: number,
+  isAggressor: boolean,
+  facingVillainBet: boolean,
+): CbetRecommendation {
+  if (facingVillainBet) {
+    if (madeHandRank >= 5) return { action: 'bet', sizingPct: 0, reason: 'Very strong hand facing a bet — raise to build the pot.' };
+    if (madeHandRank >= 3) return { action: 'bet', sizingPct: 0, reason: 'Strong made hand — call or raise depending on sizing.' };
+    if (madeHandRank === 2) return { action: 'bet', sizingPct: 0, reason: 'One pair: call if pot odds justify, fold to oversized bets.' };
+    return { action: 'check', sizingPct: 0, reason: 'Weak holding facing aggression — fold unless you have a strong draw.' };
+  }
+  if (!isAggressor) {
+    if (madeHandRank >= 4) return { action: 'bet', sizingPct: 50, reason: 'Donk-bet strong value hands for protection and to build the pot.' };
+    return { action: 'check', sizingPct: 0, reason: 'Check to the PF aggressor — they have the range advantage and will often c-bet.' };
+  }
+  switch (texture) {
+    case 'dry':
+      return { action: 'bet', sizingPct: 33, reason: 'Dry board is perfect for a small, high-frequency c-bet. You have a range advantage and opponents fold a lot.' };
+    case 'semiWet':
+      if (madeHandRank >= 3) return { action: 'bet', sizingPct: 60, reason: 'Two pair+ on semi-wet board: size up to deny draw equity.' };
+      if (madeHandRank === 2) return { action: 'bet', sizingPct: 50, reason: 'One pair: medium c-bet for value + protection vs draws.' };
+      return { action: 'check', sizingPct: 0, reason: 'Semi-wet miss: check to balance your range and avoid getting raised off your hand.' };
+    case 'wet':
+      if (madeHandRank >= 4) return { action: 'bet', sizingPct: 75, reason: 'Very strong hand on a wet board — size up to charge all the draws.' };
+      if (madeHandRank === 3) return { action: 'bet', sizingPct: 66, reason: 'Trips on wet board: charge the flush and straight draws.' };
+      return { action: 'check', sizingPct: 0, reason: 'Wet board miss: checking is better — bluffs are easy to raise here.' };
+    case 'monotone':
+      if (madeHandRank >= 6) return { action: 'bet', sizingPct: 50, reason: 'You have the flush — bet for value on a monotone board.' };
+      return { action: 'check', sizingPct: 0, reason: 'Check monotone without a flush. Villain can always represent a flush against your bets.' };
+    case 'paired':
+      if (madeHandRank >= 4) return { action: 'bet', sizingPct: 50, reason: 'Trips or better on paired board — solid value bet.' };
+      if (madeHandRank >= 2) return { action: 'bet', sizingPct: 33, reason: 'Small bet on paired board exploits your range advantage as the PF raiser.' };
+      return { action: 'check', sizingPct: 0, reason: 'Check misses on paired boards — hard to credibly represent a big hand.' };
+  }
+}
+
+export function simulateVillainPostFlop(
+  playerType: PlayerType,
+  texture: BoardTexture,
+  potBB: number,
+): { action: 'bet' | 'check'; betPct: number; betBB: number } {
+  const rand = Math.random();
+  const aggrMod = texture === 'wet' ? 1.25 : texture === 'dry' ? 0.7 : 1.0;
+  const freqs: Record<PlayerType, number> = { TAG: 0.38, LAG: 0.62, Nit: 0.18, Fish: 0.28, Maniac: 0.82 };
+  const freq = Math.min(freqs[playerType] * aggrMod, 0.95);
+  if (rand < freq) {
+    const betPct = playerType === 'Maniac' ? 90 + Math.floor(Math.random() * 40) :
+                   playerType === 'Fish'   ? 50 + Math.floor(Math.random() * 30) :
+                   35 + Math.floor(Math.random() * 35);
+    const betBB = Math.round((betPct / 100) * potBB * 10) / 10;
+    return { action: 'bet', betPct, betBB };
+  }
+  return { action: 'check', betPct: 0, betBB: 0 };
+}
+
 // ── Preflop Action Simulation for Bots ────────────────────────────────────
 
 export function simulateBotAction(
