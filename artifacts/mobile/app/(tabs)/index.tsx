@@ -12,6 +12,7 @@ import { useColors } from '@/hooks/useColors';
 import PokerTable from '@/components/PokerTable';
 import ActionPanel from '@/components/ActionPanel';
 import CoachModal from '@/components/CoachModal';
+import HandReportModal from '@/components/HandReportModal';
 import {
   DIFFICULTIES, DIFFICULTY_DESCRIPTIONS, getHandNotation,
   evaluateMadeHand, MADE_HAND_COLORS,
@@ -31,6 +32,7 @@ export default function PlayScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const [showDifficultyPicker, setShowDifficultyPicker] = React.useState(false);
+  const [showHandReport, setShowHandReport] = React.useState(false);
 
   const lastLoggedHand = React.useRef<number>(-1);
 
@@ -277,10 +279,20 @@ export default function PlayScreen() {
             )}
           </View>
 
-          {/* Next hand button */}
+          {/* Report + Next hand buttons */}
           <View style={styles.nextHandBar}>
+            {state.analysis && (
+              <TouchableOpacity
+                style={[styles.reportBtn, { borderColor: colors.border, backgroundColor: colors.secondary }]}
+                onPress={() => setShowHandReport(true)}
+                activeOpacity={0.8}
+              >
+                <Feather name="clipboard" size={14} color={colors.foreground} />
+                <Text style={[styles.reportBtnText, { color: colors.foreground }]}>HAND REPORT</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
-              style={[styles.nextHandFixed, { backgroundColor: colors.gold }]}
+              style={[styles.nextHandFixed, { backgroundColor: colors.gold, flex: 1 }]}
               onPress={handleNewHand}
               activeOpacity={0.85}
             >
@@ -292,6 +304,7 @@ export default function PlayScreen() {
 
       <ActionPanel />
       <CoachModal />
+      <HandReportModal visible={showHandReport} onClose={() => setShowHandReport(false)} />
     </View>
   );
 }
@@ -351,12 +364,19 @@ const styles = StyleSheet.create({
 
   // NEXT HAND bar (inside the showdown footer)
   nextHandBar: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 8,
   },
+  reportBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingVertical: 16, paddingHorizontal: 14,
+    borderRadius: 14, borderWidth: 1.5,
+  },
+  reportBtnText: { fontSize: 12, fontWeight: '800', letterSpacing: 0.5 },
   nextHandFixed: {
-    width: '100%', paddingVertical: 16, borderRadius: 14, alignItems: 'center',
+    paddingVertical: 16, borderRadius: 14, alignItems: 'center',
     shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3, shadowRadius: 6, elevation: 8,
   },

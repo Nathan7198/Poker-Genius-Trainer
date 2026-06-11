@@ -264,7 +264,10 @@ function buildPreflopAnalysis(
   const exploitTip = getExploitTipPreflop(villainType);
   return {
     handNotation: notation, heroPosition, heroAction: action, raiseAmountBB: raiseBB,
-    isGTO, gtoAction, gtoRaiseSize: gtoAction === 'raise' ? 3 : undefined,
+    isGTO, gtoAction,
+    gtoRaiseSize: gtoAction === 'raise'
+      ? (actionCtx.facingRaise ? Math.max(9, Math.round(actionCtx.raiseAmount * 3.2)) : 3)
+      : undefined,
     equity, potOdds, mistakes, advice, exploitTip, handStrength: strength,
   };
 }
