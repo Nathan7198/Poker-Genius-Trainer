@@ -48,18 +48,19 @@ export default function PlayerSeat({ player, showCards }: PlayerSeatProps) {
         ))}
       </View>
 
+      {/* Player type badge */}
+      <View style={[styles.typeBadge, { backgroundColor: typeInfo.color + '22', borderColor: typeInfo.color + '55' }]}>
+        <Feather name={(TYPE_ICONS[player.type] ?? 'user') as any} size={7} color={typeInfo.color} />
+        <Text style={[styles.typeText, { color: typeInfo.color }]} numberOfLines={1}>
+          {typeInfo.shortLabel} · {typeInfo.vpip}%
+        </Text>
+      </View>
+
       {/* Player info */}
       <View style={[styles.info, { backgroundColor: colors.card }]}>
-        <View style={styles.nameRow}>
-          <Feather
-            name={(TYPE_ICONS[player.type] ?? 'user') as any}
-            size={9}
-            color={typeInfo.color}
-          />
-          <Text style={[styles.name, { color: colors.foreground }]} numberOfLines={1}>
-            {player.name}
-          </Text>
-        </View>
+        <Text style={[styles.name, { color: colors.foreground }]} numberOfLines={1}>
+          {player.name}
+        </Text>
         <Text style={[styles.stack, { color: colors.mutedForeground }]}>
           {player.stack}BB
         </Text>
@@ -128,10 +129,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     minWidth: 60,
   },
-  nameRow: {
+  typeBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    marginBottom: 2,
+    alignSelf: 'stretch',
+    justifyContent: 'center',
+  },
+  typeText: {
+    fontSize: 7.5,
+    fontWeight: '700',
+    letterSpacing: 0.2,
   },
   name: {
     fontSize: 9,
