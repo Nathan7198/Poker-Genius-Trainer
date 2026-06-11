@@ -451,7 +451,10 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 
     case 'HERO_ACT': {
       const { action: heroAction, raiseBB = 3 } = action;
-      const heroBet = heroAction === 'raise' ? raiseBB : heroAction === 'call' ? state.actionCtx.raiseAmount : 0;
+      // When limping (no raise), cost is 0.5BB for SB (completing) or 1BB for other non-BB positions
+      const limpCost = state.heroPosition === 'SB' ? 0.5 : 1;
+      const callCost = state.actionCtx.facingRaise ? state.actionCtx.raiseAmount : limpCost;
+      const heroBet = heroAction === 'raise' ? raiseBB : heroAction === 'call' ? callCost : 0;
       const newPot = state.pot + heroBet;
       const analysis = buildPreflopAnalysis(state.heroCards, state.heroPosition, heroAction, raiseBB, state.actionCtx, state.mainVillainType);
 

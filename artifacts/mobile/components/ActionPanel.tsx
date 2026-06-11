@@ -149,10 +149,17 @@ export default function ActionPanel() {
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.btn, styles.callBtn, { flex: 1 }]}
-              onPress={() => handlePreflop(actionCtx.facingRaise ? 'call' : 'check')}
+              onPress={() => handlePreflop(
+                !actionCtx.facingRaise && heroPosition === 'BB' ? 'check' : 'call'
+              )}
             >
               <Text style={styles.btnText}>
-                {actionCtx.facingRaise ? `CALL ${actionCtx.raiseAmount}BB` : 'CHECK'}
+                {!actionCtx.facingRaise && heroPosition === 'BB'
+                  ? 'CHECK'
+                  : actionCtx.facingRaise
+                    ? `CALL ${actionCtx.raiseAmount}BB`
+                    : `CALL ${heroPosition === 'SB' ? '0.5' : '1'}BB`
+                }
               </Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.btn, styles.raiseBtn]} onPress={() => setRaiseMode(true)}>
