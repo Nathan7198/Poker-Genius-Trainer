@@ -5,37 +5,52 @@ import { POSITIONS } from '@/constants/pokerData';
 import PlayingCard from './PlayingCard';
 import PlayerSeat from './PlayerSeat';
 
-// Clockwise from hero (bottom): lower-right → upper-right → top → upper-left → lower-left
-// In screen coords (y-down), clockwise from 90° decreases the angle.
-// Seat 0 = immediately clockwise from hero, Seat 4 = immediately counter-clockwise.
-const OPPONENT_ANGLES_DEG = [30, 330, 270, 210, 150];
+// Clockwise from hero (bottom-center):
+//   150° = lower-left (1st clockwise = SB when hero is BTN)
+//   210° = upper-left
+//   270° = top-center
+//   330° = upper-right
+//    30° = lower-right (last clockwise = CO when hero is BTN)
+// In screen coords (y increases downward), going clockwise from the bottom
+// means angles INCREASE from 90°: 90→150→210→270→330→30→90.
+const OPPONENT_ANGLES_DEG = [150, 210, 270, 330, 30];
 
 function degToRad(deg: number) {
   return (deg * Math.PI) / 180;
 }
 
-const TABLE_H = 290;
+// Seats extend AWAY from the table centre:
+//  • Upper seats (sin < 0, y < cy) → seat grows upward — anchor at seat bottom
+//  • Lower seats (sin > 0, y > cy) → seat grows downward — anchor at seat top
+function getSeatTopOffset(angleDeg: number): number {
+  return Math.sin(degToRad(angleDeg)) > 0.05 ? -8 : -85;
+}
+
+const TABLE_H = 340;
+// cy is intentionally above the geometric centre so the lower half has
+// more room for community cards (centre band) and the hero area.
+const CY = 155;
+const RY = 105;
 
 export default function PokerTable() {
   const { state } = useGame();
   const { width } = useWindowDimensions();
 
-  // Felt dimensions
   const tableW = width - 16;
   const cx = tableW / 2;
-  const cy = TABLE_H / 2;   // 145
   const rx = tableW * 0.40;
-  const ry = 85; // fixed — keeps top-center seat inside the table
 
   function getSeatPos(angleDeg: number) {
     const r = degToRad(angleDeg);
     return {
       x: cx + rx * Math.cos(r),
-      y: cy + ry * Math.sin(r),
+      y: CY + RY * Math.sin(r),
     };
   }
 
-  // Sort opponents clockwise from hero so seat[0] = first clockwise, seat[4] = last
+  // Sort opponents clockwise from heroPosition:
+  //   seat[0] = first clockwise (e.g. SB when hero is BTN) → lower-left (150°)
+  //   seat[4] = last  clockwise (e.g. CO when hero is BTN) → lower-right (30°)
   const heroIdx = POSITIONS.indexOf(state.heroPosition);
   const activePlayers = [...state.players]
     .sort((a, b) => {
@@ -47,13 +62,27 @@ export default function PokerTable() {
     .slice(0, 5);
 
   return (
-    <View style={[styles.outer, { height: TABLE_H + 48, width: tableW }]}>
+    <View style={[styles.outer, { height: TABLE_H + 54, width: tableW }]}>
       {/* Table felt */}
       <View style={[styles.felt, { width: tableW, height: TABLE_H, borderRadius: TABLE_H / 2 + 8 }]}>
         {/* Inner dashed border */}
         <View style={[styles.feltInner, { width: tableW - 40, height: TABLE_H - 40, borderRadius: TABLE_H / 2 }]} />
 
-        {/* Pot display */}
+        {/* Bot player seats — absolutely positioned on the oval */}
+        {activePlayers.map((player, i) => {
+          const pos = getSeatPos(OPPONENT_ANGLES_DEG[i]);
+          const topOffset = getSeatTopOffset(OPPONENT_ANGLES_DEG[i]);
+          return (
+            <View
+              key={player.id}
+              style={[styles.seatAbsolute, { left: pos.x - 36, top: pos.y + topOffset }]}
+            >
+              <PlayerSeat player={player} showCards={state.phase === 'showdown'} />
+            </View>
+          );
+        })}
+
+        {/* Pot display — sits in the clear band below upper seats */}
         {state.pot > 0 && (
           <View style={styles.potBadge}>
             <Text style={styles.potLabel}>POT</Text>
@@ -61,11 +90,11 @@ export default function PokerTable() {
           </View>
         )}
 
-        {/* Community cards — center of felt */}
+        {/* Community cards — in the clear band above lower seats */}
         <View style={styles.communityCards}>
           {state.phase !== 'idle' && state.phase !== 'preflop' ? (
             state.communityCards.slice(0, 5).map((card, i) => (
-              <PlayingCard key={i} card={card} size="md" faceDown={!card.faceUp} />
+              <PlayingCard key={i} card={card} size="sm" faceDown={!card.faceUp} />
             ))
           ) : state.phase === 'preflop' ? (
             <View style={styles.preflopHint}>
@@ -73,19 +102,6 @@ export default function PokerTable() {
             </View>
           ) : null}
         </View>
-
-        {/* Bot player seats — absolutely positioned on the oval */}
-        {activePlayers.map((player, i) => {
-          const pos = getSeatPos(OPPONENT_ANGLES_DEG[i]);
-          return (
-            <View
-              key={player.id}
-              style={[styles.seatAbsolute, { left: pos.x - 36, top: pos.y - 60 }]}
-            >
-              <PlayerSeat player={player} showCards={state.phase === 'showdown'} />
-            </View>
-          );
-        })}
       </View>
 
       {/* Hero seat — always below the felt */}
@@ -150,10 +166,11 @@ const styles = StyleSheet.create({
   },
   potBadge: {
     position: 'absolute',
-    top: '34%',
+    // Sits at 22 % of TABLE_H (~75 px): below top seat, above community cards
+    top: '22%',
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.55)',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 8,
@@ -168,7 +185,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     position: 'absolute',
-    top: '55%',
+    // Sits at 39 % of TABLE_H (~133 px): below upper seats, above lower seats
+    top: '39%',
   },
   preflopHint: {
     paddingHorizontal: 16,
