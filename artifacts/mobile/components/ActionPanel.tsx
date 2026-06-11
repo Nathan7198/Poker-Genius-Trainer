@@ -31,7 +31,7 @@ export default function ActionPanel() {
 
   if (!visible) return null;
 
-  const { actionCtx, heroCards, heroPosition, difficulty, villainPostFlopAction, heroIsAggressor } = state;
+  const { actionCtx, heroCards, heroPosition, difficulty, villainPostFlopAction, heroIsAggressor, heroActsFirst } = state;
   const board = state.communityCards.filter(c => c.faceUp);
 
   const notation = heroCards.length === 2 ? getHandNotation(heroCards[0], heroCards[1]) : '';
@@ -201,22 +201,27 @@ export default function ActionPanel() {
         </View>
       )}
 
-      {/* Villain action banner */}
-      {facingVillainBet && villainPostFlopAction && (
-        <View style={[styles.contextBanner, { backgroundColor: '#8A6D2815', borderColor: '#8A6D2840', borderWidth: 1 }]}>
-          <Text style={[styles.contextText, { color: '#E5C76B' }]}>
-            Villain bets {villainPostFlopAction.betPct}% pot ({villainPostFlopAction.betBB}BB)
-            {showInfo ? ` · Pot odds: ${calcPotOdds(villainPostFlopAction.betBB, state.pot)}%` : ''}
+      {/* Action order context */}
+      {heroActsFirst && !villainPostFlopAction ? (
+        <View style={[styles.contextBanner, { backgroundColor: '#1A3A5C20', borderColor: '#3498DB40', borderWidth: 1 }]}>
+          <Text style={[styles.contextText, { color: '#3498DB' }]}>
+            {heroPosition} acts first · Pot: {potBB}BB · {streetLabel}
           </Text>
         </View>
-      )}
-      {!facingVillainBet && isPostFlop && (
+      ) : facingVillainBet && villainPostFlopAction ? (
+        <View style={[styles.contextBanner, { backgroundColor: '#8A6D2815', borderColor: '#8A6D2840', borderWidth: 1 }]}>
+          <Text style={[styles.contextText, { color: '#E5C76B' }]}>
+            {heroActsFirst ? `Villain raised after your action` : `Villain bets ${villainPostFlopAction.betPct}% pot (${villainPostFlopAction.betBB}BB)`}
+            {showInfo && !heroActsFirst ? ` · Pot odds: ${calcPotOdds(villainPostFlopAction.betBB, state.pot)}%` : ''}
+          </Text>
+        </View>
+      ) : isPostFlop ? (
         <View style={[styles.contextBanner, { backgroundColor: colors.secondary }]}>
           <Text style={[styles.contextText, { color: colors.mutedForeground }]}>
             Villain checks · Pot: {potBB}BB · {streetLabel}
           </Text>
         </View>
-      )}
+      ) : null}
 
       {/* Bet sizing panel */}
       {betMode ? (

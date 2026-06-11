@@ -1,12 +1,14 @@
 import React from 'react';
 import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useGame } from '@/context/GameContext';
+import { POSITIONS } from '@/constants/pokerData';
 import PlayingCard from './PlayingCard';
 import PlayerSeat from './PlayerSeat';
 
-// Angles spread across the UPPER half of the oval — no seats at the bottom
-// 270° = top-center, 195°/345° = sides, 230°/310° = upper corners
-const OPPONENT_ANGLES_DEG = [345, 310, 270, 230, 195];
+// Clockwise from hero (bottom): lower-right → upper-right → top → upper-left → lower-left
+// In screen coords (y-down), clockwise from 90° decreases the angle.
+// Seat 0 = immediately clockwise from hero, Seat 4 = immediately counter-clockwise.
+const OPPONENT_ANGLES_DEG = [30, 330, 270, 210, 150];
 
 function degToRad(deg: number) {
   return (deg * Math.PI) / 180;
@@ -33,7 +35,16 @@ export default function PokerTable() {
     };
   }
 
-  const activePlayers = state.players.slice(0, 5);
+  // Sort opponents clockwise from hero so seat[0] = first clockwise, seat[4] = last
+  const heroIdx = POSITIONS.indexOf(state.heroPosition);
+  const activePlayers = [...state.players]
+    .sort((a, b) => {
+      const ai = POSITIONS.indexOf(a.position as (typeof POSITIONS)[number]);
+      const bi = POSITIONS.indexOf(b.position as (typeof POSITIONS)[number]);
+      return ((ai - heroIdx + POSITIONS.length) % POSITIONS.length) -
+             ((bi - heroIdx + POSITIONS.length) % POSITIONS.length);
+    })
+    .slice(0, 5);
 
   return (
     <View style={[styles.outer, { height: TABLE_H + 48, width: tableW }]}>

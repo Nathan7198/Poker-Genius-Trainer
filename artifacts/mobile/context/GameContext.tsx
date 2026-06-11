@@ -99,6 +99,9 @@ export interface GameState {
   heroIsAggressor: boolean;
   villainPostFlopAction: VillainPostFlopAction|null;
   mainVillainType: PlayerType;
+  mainVillainPosition: Position;
+  /** True when hero is OOP (SB/BB) and acts FIRST on each post-flop street */
+  heroActsFirst: boolean;
   postFlopStreetsDone: PostFlopStreet[];
   /** Rolling list of recent flop signatures (rank+suit sorted) — prevents board repeats */
   recentBoardSigs: string[];
@@ -126,6 +129,7 @@ function buildInitialState(): GameState {
     analysis: null, postFlopAnalysis: null, postFlopAnalysisHistory: [],
     showAnalysis: false, lastHeroAction: null, heroIsAggressor: false,
     villainPostFlopAction: null, mainVillainType: 'TAG',
+    mainVillainPosition: 'BTN', heroActsFirst: false,
     postFlopStreetsDone: [], recentBoardSigs: [],
   };
 }
@@ -357,7 +361,9 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 
       const faceDown = communityCards.map(c => ({ ...c, faceUp: false }));
       const { players: updatedPlayers, actionCtx, pot } = simulateBotPreflop(players, heroPosition);
-      const mainVillainType = getMainVillain(updatedPlayers).type;
+      const mainVillain = getMainVillain(updatedPlayers);
+      const mainVillainType = mainVillain.type;
+      const mainVillainPosition = mainVillain.position;
       const newRecentSigs = [...recentSigs.slice(-(BOARD_SIG_WINDOW - 1)), sig];
 
       return {
@@ -372,7 +378,8 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         postFlopAnalysisHistory: [],
         showAnalysis: false, lastHeroAction: null,
         heroIsAggressor: false, villainPostFlopAction: null,
-        mainVillainType, postFlopStreetsDone: [],
+        mainVillainType, mainVillainPosition, heroActsFirst: false,
+        postFlopStreetsDone: [],
         recentBoardSigs: newRecentSigs,
       };
     }
@@ -389,13 +396,20 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 
       const flopCards = revealCommunityCards(state.communityCards, 3);
       const heroIsAggressor = heroAction === 'raise';
-      const villain = simulateVillainPostFlop(state.mainVillainType, analyzeBoardTexture(flopCards.filter(c => c.faceUp)).texture, newPot);
+
+      // Post-flop action order: SB → BB → UTG → HJ → CO → BTN
+      // Hero acts first (is OOP) when hero's post-flop position comes before villain's
+      const POSTFLOP_ORDER: Position[] = ['SB','BB','UTG','HJ','CO','BTN'];
+      const heroActsFirst = POSTFLOP_ORDER.indexOf(state.heroPosition) < POSTFLOP_ORDER.indexOf(state.mainVillainPosition);
+      const villain = heroActsFirst
+        ? null
+        : simulateVillainPostFlop(state.mainVillainType, analyzeBoardTexture(flopCards.filter(c => c.faceUp)).texture, newPot);
 
       return {
         ...state, phase: 'flop', heroBet, pot: newPot,
         communityCards: flopCards, analysis, postFlopAnalysis: null,
         showAnalysis: true, lastHeroAction: heroAction,
-        heroIsAggressor, villainPostFlopAction: villain,
+        heroIsAggressor, villainPostFlopAction: villain, heroActsFirst,
         postFlopStreetsDone: [],
       };
     }
@@ -404,9 +418,16 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       const { action: heroAction, betPct = 0 } = action;
       const street = state.phase as PostFlopStreet;
       const board = state.communityCards.filter(c => c.faceUp);
+
+      // When hero acts first (OOP), simulate villain's RESPONSE after hero's action.
+      // When villain acted first (IP), use the pre-computed villain action.
+      const resolvedVillainAction = state.heroActsFirst
+        ? simulateVillainPostFlop(state.mainVillainType, analyzeBoardTexture(board).texture, state.pot)
+        : (state.villainPostFlopAction ?? { action: 'check' as const, betPct: 0, betBB: 0 });
+
       const pfa = buildPostFlopAnalysis(
         state.heroCards, board, street, heroAction, betPct, state.pot,
-        state.villainPostFlopAction ?? { action: 'check', betPct: 0, betBB: 0 },
+        resolvedVillainAction,
         state.heroIsAggressor,
       );
 
@@ -423,6 +444,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         return {
           ...state, phase: 'showdown', pot: newPot,
           postFlopAnalysis: pfa, postFlopAnalysisHistory: newHistory,
+          villainPostFlopAction: resolvedVillainAction,
           showAnalysis: true,
           postFlopStreetsDone: [...state.postFlopStreetsDone, street],
         };
@@ -431,6 +453,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       return {
         ...state, pot: newPot,
         postFlopAnalysis: pfa, postFlopAnalysisHistory: newHistory,
+        villainPostFlopAction: resolvedVillainAction,
         showAnalysis: true,
         postFlopStreetsDone: [...state.postFlopStreetsDone, street],
       };
@@ -440,12 +463,17 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       if (state.phase === 'flop') {
         const turnCards = revealCommunityCards(state.communityCards, 1);
         const board = turnCards.filter(c => c.faceUp);
-        const villain = simulateVillainPostFlop(state.mainVillainType, analyzeBoardTexture(board).texture, state.pot);
+        // OOP hero acts first on every street; IP villain opens each street
+        const villain = state.heroActsFirst
+          ? null
+          : simulateVillainPostFlop(state.mainVillainType, analyzeBoardTexture(board).texture, state.pot);
         return { ...state, phase: 'turn', communityCards: turnCards, postFlopAnalysis: null, showAnalysis: false, villainPostFlopAction: villain };
       }
       if (state.phase === 'turn') {
         const riverCards = state.communityCards.map(c => ({ ...c, faceUp: true }));
-        const villain = simulateVillainPostFlop(state.mainVillainType, analyzeBoardTexture(riverCards).texture, state.pot);
+        const villain = state.heroActsFirst
+          ? null
+          : simulateVillainPostFlop(state.mainVillainType, analyzeBoardTexture(riverCards).texture, state.pot);
         return { ...state, phase: 'river', communityCards: riverCards, postFlopAnalysis: null, showAnalysis: false, villainPostFlopAction: villain };
       }
       if (state.phase === 'river') {
