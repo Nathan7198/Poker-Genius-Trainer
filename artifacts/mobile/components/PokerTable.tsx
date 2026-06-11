@@ -30,14 +30,18 @@ export default function PokerTable() {
   const { state } = useGame();
   const { width, height } = useWindowDimensions();
 
-  // Reserve space for: top bar (~52) + tab bar padding (~94) + worst-case action
-  // panel with bet-sizing open (~290) + scroll padding (~52) + hero row (~90) +
-  // small buffer (16).  That leaves the remainder for the felt oval.
-  // Clamp between 220 (minimum usable) and 340 (original size on tall screens).
-  const TABLE_H = Math.max(220, Math.min(340, height - 594));
-  // Keep CY and RY proportional to TABLE_H (original ratios: 155/340, 105/340)
+  // Clamp felt height: reserve top-bar(~52) + tab(~94) + worst-case panel(~290)
+  // + hero row(~90) + padding(~20) = 546. What's left is the felt oval.
+  const TABLE_H = Math.max(220, Math.min(340, height - 546));
+  // CY/RY proportional to TABLE_H (original ratios: 155/340, 105/340)
   const CY = Math.round(TABLE_H * 0.456);
   const RY = Math.round(TABLE_H * 0.309);
+
+  // Upper seats are absolutely positioned with a -85px topOffset, meaning they
+  // extend above the outer view.  Bake that overflow into paddingTop so the
+  // outer view fully contains all visible content — no clipping behind the header.
+  const TOP_SEAT_Y = CY - RY;           // y of top seat centre within felt
+  const SEAT_OVERFLOW = Math.max(0, 85 - TOP_SEAT_Y); // px extending above felt top
 
   const tableW = width - 16;
   const cx = tableW / 2;
@@ -65,7 +69,7 @@ export default function PokerTable() {
     .slice(0, 5);
 
   return (
-    <View style={[styles.outer, { height: TABLE_H + 90, width: tableW }]}>
+    <View style={[styles.outer, { height: TABLE_H + SEAT_OVERFLOW + 90, paddingTop: SEAT_OVERFLOW, width: tableW }]}>
       {/* Table felt */}
       <View style={[styles.felt, { width: tableW, height: TABLE_H, borderRadius: TABLE_H / 2 + 8 }]}>
         {/* Inner dashed border */}
