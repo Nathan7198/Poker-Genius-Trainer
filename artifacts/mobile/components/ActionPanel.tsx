@@ -31,7 +31,7 @@ export default function ActionPanel() {
 
   if (!visible) return null;
 
-  const { actionCtx, heroCards, heroPosition, difficulty, villainPostFlopAction, heroIsAggressor, heroActsFirst } = state;
+  const { actionCtx, heroCards, heroPosition, difficulty, villainPostFlopAction, heroIsAggressor, heroActsFirst, heroCheckedStreet } = state;
   const board = state.communityCards.filter(c => c.faceUp);
 
   const notation = heroCards.length === 2 ? getHandNotation(heroCards[0], heroCards[1]) : '';
@@ -220,8 +220,10 @@ export default function ActionPanel() {
       ) : facingVillainBet && villainPostFlopAction ? (
         <View style={[styles.contextBanner, { backgroundColor: '#8A6D2815', borderColor: '#8A6D2840', borderWidth: 1 }]}>
           <Text style={[styles.contextText, { color: '#E5C76B' }]}>
-            {heroActsFirst ? `Villain raised after your action` : `Villain bets ${villainPostFlopAction.betPct}% pot (${villainPostFlopAction.betBB}BB)`}
-            {showInfo && !heroActsFirst ? ` · Pot odds: ${calcPotOdds(villainPostFlopAction.betBB, state.pot - villainPostFlopAction.betBB)}%` : ''}
+            {heroCheckedStreet
+              ? `You checked · Villain bet ${villainPostFlopAction.betPct}% pot (${villainPostFlopAction.betBB}BB)`
+              : `Villain bets ${villainPostFlopAction.betPct}% pot (${villainPostFlopAction.betBB}BB)`}
+            {showInfo ? ` · Pot odds: ${calcPotOdds(villainPostFlopAction.betBB, state.pot - villainPostFlopAction.betBB)}%` : ''}
           </Text>
         </View>
       ) : isPostFlop ? (

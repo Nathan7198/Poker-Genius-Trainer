@@ -123,6 +123,12 @@ export interface GameState {
   showdownResult: ShowdownResult | null;
   /** True when villain folded — hero wins without a showdown */
   villainFolded: boolean;
+  /**
+   * Set to the current street when hero (OOP) checked and villain bet in
+   * response — hero still needs to fold/call/raise before the street ends.
+   * Null at all other times.
+   */
+  heroCheckedStreet: PostFlopStreet | null;
 }
 
 type GameAction =
@@ -151,6 +157,7 @@ function buildInitialState(): GameState {
     mainVillainPosition: 'BTN', heroActsFirst: false,
     postFlopStreetsDone: [], recentBoardSigs: [],
     showdownResult: null, villainFolded: false,
+    heroCheckedStreet: null,
   };
 }
 
@@ -463,6 +470,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         postFlopStreetsDone: [],
         recentBoardSigs: newRecentSigs,
         showdownResult: null, villainFolded: false,
+        heroCheckedStreet: null,
       };
     }
 
@@ -566,6 +574,122 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       const villainPlayer = getMainVillainPlayer(state);
       const villainCards = villainPlayer.cards;
 
+      // ── BRANCH A: Hero (OOP) checks for the first time this street ────────
+      // Villain responds — if they bet, pause so hero can fold/call/raise.
+      if (state.heroActsFirst && heroAction === 'check' && state.heroCheckedStreet !== street) {
+        const villainResp = simulateVillainPostFlop(
+          state.mainVillainType,
+          analyzeBoardTexture(board).texture,
+          state.pot, 'check', villainCards, board,
+        );
+
+        if (villainResp.action === 'bet') {
+          // Villain bets after hero's check — add villain chips and wait for hero's response
+          return {
+            ...state,
+            pot: state.pot + villainResp.betBB,
+            villainPostFlopAction: villainResp,
+            heroCheckedStreet: street,
+            lastHeroAction: 'check',
+            showAnalysis: false,
+          };
+        }
+
+        // Villain checked back — street ends as check-check
+        const pfaCC = buildPostFlopAnalysis(
+          state.heroCards, board, street, 'check', 0, state.pot,
+          { action: 'check', betPct: 0, betBB: 0 }, null,
+          state.heroIsAggressor, state.mainVillainType,
+        );
+        return {
+          ...state,
+          postFlopAnalysis: pfaCC,
+          postFlopAnalysisHistory: [...state.postFlopAnalysisHistory, pfaCC],
+          villainPostFlopAction: villainResp,
+          showAnalysis: true,
+          lastHeroAction: 'check',
+          heroCheckedStreet: null,
+        };
+      }
+
+      // ── BRANCH B: Hero responds to villain's bet after having checked OOP ──
+      // Villain's bet chips are already baked into state.pot.
+      if (state.heroCheckedStreet === street) {
+        const villainBet   = state.villainPostFlopAction!;
+        const villainAlrIn = villainBet.betBB;
+
+        let vFinalB: VillainPostFlopAction;
+        if (heroAction === 'fold') {
+          vFinalB = villainBet;
+        } else if (heroAction === 'bet' || heroAction === 'raise') {
+          // Check-raise — simulate villain's response to the re-raise
+          vFinalB = simulateVillainPostFlop(
+            state.mainVillainType, analyzeBoardTexture(board).texture,
+            state.pot + betBB, 'raise', villainCards, board,
+          );
+        } else {
+          vFinalB = villainBet; // call — no further action
+        }
+
+        const vFoldedB = vFinalB.action === 'fold';
+
+        let newPotB = state.pot;
+        if (heroAction === 'call') {
+          newPotB += villainBet.betBB;
+        } else if (heroAction === 'bet' || heroAction === 'raise') {
+          newPotB += betBB;
+          if (vFinalB.action === 'call')  newPotB += Math.max(0, betBB - villainAlrIn);
+          if (vFinalB.action === 'raise') {
+            newPotB += Math.max(0, vFinalB.betBB - villainAlrIn);
+            newPotB += Math.max(0, vFinalB.betBB - betBB);
+          }
+        }
+
+        // Analysis: hero faced villain's bet (check-raise / call / fold)
+        const pfaB = buildPostFlopAnalysis(
+          state.heroCards, board, street,
+          (heroAction === 'bet' ? 'raise' : heroAction) as PostFlopHeroAction,
+          betPct, state.pot,
+          villainBet,
+          vFinalB.action !== villainBet.action ? vFinalB : null,
+          state.heroIsAggressor, state.mainVillainType,
+        );
+        const newHistB = [...state.postFlopAnalysisHistory, pfaB];
+        const newDoneB = [...state.postFlopStreetsDone, street];
+
+        if (heroAction === 'fold') {
+          return {
+            ...state, phase: 'showdown', pot: newPotB,
+            postFlopAnalysis: pfaB, postFlopAnalysisHistory: newHistB,
+            villainPostFlopAction: villainBet, showAnalysis: true,
+            postFlopStreetsDone: newDoneB,
+            showdownResult: 'villain', villainFolded: false,
+            heroCheckedStreet: null,
+            lastHeroAction: heroAction as HeroAction,
+          };
+        }
+
+        if (vFoldedB) {
+          return {
+            ...state, phase: 'showdown', pot: newPotB,
+            postFlopAnalysis: pfaB, postFlopAnalysisHistory: newHistB,
+            showAnalysis: true, postFlopStreetsDone: newDoneB,
+            showdownResult: 'hero', villainFolded: true,
+            heroCheckedStreet: null,
+            lastHeroAction: (heroAction === 'bet' ? 'raise' : heroAction) as HeroAction,
+          };
+        }
+
+        return {
+          ...state, pot: newPotB,
+          postFlopAnalysis: pfaB, postFlopAnalysisHistory: newHistB,
+          villainPostFlopAction: vFinalB, showAnalysis: true,
+          postFlopStreetsDone: newDoneB,
+          heroCheckedStreet: null,
+          lastHeroAction: (heroAction === 'bet' ? 'raise' : heroAction) as HeroAction,
+        };
+      }
+
       // ── Determine villain actions ───────────────────────────────────────
       // villainOpenAction: what villain did BEFORE hero's current action (or check if hero acts first)
       const villainOpenAction: VillainPostFlopAction =
@@ -580,7 +704,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         // Hero folded — no villain response needed
         villainFinalResponse = villainOpenAction;
       } else if (state.heroActsFirst) {
-        // Hero acts first → villain responds to hero's action
+        // Hero acts first → villain responds to hero's bet/raise
         villainFinalResponse = simulateVillainPostFlop(
           state.mainVillainType,
           analyzeBoardTexture(board).texture,
@@ -652,6 +776,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           showAnalysis: true,
           postFlopStreetsDone: [...state.postFlopStreetsDone, street],
           showdownResult: 'villain', villainFolded: false,
+          heroCheckedStreet: null,
         };
       }
 
@@ -664,6 +789,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           showAnalysis: true,
           postFlopStreetsDone: [...state.postFlopStreetsDone, street],
           showdownResult: 'hero', villainFolded: true,
+          heroCheckedStreet: null,
         };
       }
 
@@ -673,6 +799,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         villainPostFlopAction: villainFinalResponse,
         showAnalysis: true,
         postFlopStreetsDone: [...state.postFlopStreetsDone, street],
+        heroCheckedStreet: null,
       };
     }
 
@@ -706,6 +833,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           communityCards: turnCards, postFlopAnalysis: null,
           showAnalysis: false, villainPostFlopAction: villain,
           pot: state.pot + (villain?.betBB ?? 0),
+          heroCheckedStreet: null,
         };
       }
 
@@ -723,6 +851,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           communityCards: riverCards, postFlopAnalysis: null,
           showAnalysis: false, villainPostFlopAction: villain,
           pot: state.pot + (villain?.betBB ?? 0),
+          heroCheckedStreet: null,
         };
       }
 
@@ -743,6 +872,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           postFlopAnalysis: null,
           showdownResult,
           villainFolded: false,
+          heroCheckedStreet: null,
         };
       }
 
