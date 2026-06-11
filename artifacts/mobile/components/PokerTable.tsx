@@ -62,7 +62,7 @@ export default function PokerTable() {
     .slice(0, 5);
 
   return (
-    <View style={[styles.outer, { height: TABLE_H + 54, width: tableW }]}>
+    <View style={[styles.outer, { height: TABLE_H + 90, width: tableW }]}>
       {/* Table felt */}
       <View style={[styles.felt, { width: tableW, height: TABLE_H, borderRadius: TABLE_H / 2 + 8 }]}>
         {/* Inner dashed border */}
