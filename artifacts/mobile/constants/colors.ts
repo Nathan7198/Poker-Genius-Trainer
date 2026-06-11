@@ -1,59 +1,85 @@
-/**
- * Semantic design tokens for the mobile app.
- *
- * These tokens mirror the naming conventions used in web artifacts (index.css)
- * so that multi-artifact projects share a cohesive visual identity.
- *
- * Replace the placeholder values below with values that match the project's
- * brand. If a sibling web artifact exists, read its index.css and convert the
- * HSL values to hex so both artifacts use the same palette.
- *
- * To add dark mode, add a `dark` key with the same token names.
- * The useColors() hook will automatically pick it up.
- */
-
 const colors = {
   light: {
-    // Legacy aliases (kept for backward compatibility)
-    text: "#0a0a0a",
-    tint: "#2f95dc",
-
-    // Core surfaces
-    background: "#ffffff",
-    foreground: "#0a0a0a",
-
-    // Cards / elevated surfaces
-    card: "#f9f9f9",
-    cardForeground: "#0a0a0a",
-
-    // Primary action color (buttons, links, active states)
-    primary: "#2f95dc",
-    primaryForeground: "#ffffff",
-
-    // Secondary / less-emphasis interactive surfaces
-    secondary: "#f0f0f0",
-    secondaryForeground: "#1a1a1a",
-
-    // Muted / subdued elements (dividers, timestamps, placeholders)
-    muted: "#f0f0f0",
-    mutedForeground: "#737373",
-
-    // Accent highlights (badges, selected items, focus rings)
-    accent: "#f0f0f0",
-    accentForeground: "#1a1a1a",
-
-    // Destructive actions (delete, error states)
-    destructive: "#ef4444",
-    destructiveForeground: "#ffffff",
-
-    // Borders and input outlines
-    border: "#e5e5e5",
-    input: "#e5e5e5",
+    text: "#F0E6C8",
+    tint: "#C9A84C",
+    background: "#0D1B0F",
+    foreground: "#F0E6C8",
+    card: "#162A18",
+    cardForeground: "#F0E6C8",
+    primary: "#C9A84C",
+    primaryForeground: "#0D1B0F",
+    secondary: "#1B3A1E",
+    secondaryForeground: "#F0E6C8",
+    muted: "#1B3A1E",
+    mutedForeground: "#7A9E7A",
+    accent: "#C9A84C",
+    accentForeground: "#0D1B0F",
+    destructive: "#D63B3B",
+    destructiveForeground: "#FFFFFF",
+    border: "#2D5030",
+    input: "#1B3A1E",
+    felt: "#1B4D2E",
+    feltEdge: "#0F3320",
+    feltHighlight: "#235C38",
+    gold: "#C9A84C",
+    goldLight: "#E5C76B",
+    goldDim: "#8A6D28",
+    chipRed: "#C0392B",
+    chipBlue: "#1B5EA6",
+    chipGreen: "#27AE60",
+    cardWhite: "#FAFAF5",
+    cardRed: "#D63B3B",
+    playerActive: "#E5C76B",
+    playerFolded: "#4A4A4A",
+    tagColor: "#27AE60",
+    lagColor: "#E67E22",
+    nitColor: "#95A5A6",
+    fishColor: "#3498DB",
+    maniacColor: "#E74C3C",
+    success: "#27AE60",
+    warning: "#E67E22",
   },
-
-  // Border radius (in px). Sync from the sibling web artifact's --radius
-  // CSS variable. This value applies to cards, buttons, inputs, and modals.
-  radius: 8,
+  dark: {
+    text: "#F0E6C8",
+    tint: "#C9A84C",
+    background: "#0D1B0F",
+    foreground: "#F0E6C8",
+    card: "#162A18",
+    cardForeground: "#F0E6C8",
+    primary: "#C9A84C",
+    primaryForeground: "#0D1B0F",
+    secondary: "#1B3A1E",
+    secondaryForeground: "#F0E6C8",
+    muted: "#1B3A1E",
+    mutedForeground: "#7A9E7A",
+    accent: "#C9A84C",
+    accentForeground: "#0D1B0F",
+    destructive: "#D63B3B",
+    destructiveForeground: "#FFFFFF",
+    border: "#2D5030",
+    input: "#1B3A1E",
+    felt: "#1B4D2E",
+    feltEdge: "#0F3320",
+    feltHighlight: "#235C38",
+    gold: "#C9A84C",
+    goldLight: "#E5C76B",
+    goldDim: "#8A6D28",
+    chipRed: "#C0392B",
+    chipBlue: "#1B5EA6",
+    chipGreen: "#27AE60",
+    cardWhite: "#FAFAF5",
+    cardRed: "#D63B3B",
+    playerActive: "#E5C76B",
+    playerFolded: "#4A4A4A",
+    tagColor: "#27AE60",
+    lagColor: "#E67E22",
+    nitColor: "#95A5A6",
+    fishColor: "#3498DB",
+    maniacColor: "#E74C3C",
+    success: "#27AE60",
+    warning: "#E67E22",
+  },
+  radius: 10,
 };
 
 export default colors;
