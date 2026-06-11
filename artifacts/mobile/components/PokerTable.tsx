@@ -166,8 +166,8 @@ const styles = StyleSheet.create({
   },
   potBadge: {
     position: 'absolute',
-    // Sits at 22 % of TABLE_H (~75 px): below top seat, above community cards
-    top: '22%',
+    // Sits at 29 % of TABLE_H (~99 px): below top seat (incl. type badge), above community cards
+    top: '29%',
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.55)',
