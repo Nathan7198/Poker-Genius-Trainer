@@ -131,7 +131,7 @@ export default function PlayScreen() {
   const TAB_BAR_H = Platform.OS === 'web' ? 84 : 60;
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.background, paddingTop: Platform.OS === 'web' ? insets.top + 10 : 0, paddingBottom: TAB_BAR_H }]}>
+    <View style={[styles.root, { backgroundColor: colors.background, paddingTop: Platform.OS === 'web' ? insets.top + 10 : 0, paddingBottom: TAB_BAR_H + insets.bottom }]}>
       {/* Header */}
       <View style={[styles.topBar, { paddingTop: Platform.OS !== 'web' ? insets.top + 4 : 4, borderBottomColor: colors.border }]}>
         <View>
@@ -260,7 +260,7 @@ const styles = StyleSheet.create({
   diffOptionName: { fontSize: 14, fontWeight: '700' },
   diffOptionDesc: { fontSize: 11, marginTop: 2, lineHeight: 15 },
   scroll: { flex: 1 },
-  scrollContent: { paddingBottom: 8 },
+  scrollContent: { paddingBottom: 8, paddingTop: 16 },
   actionBanner: { marginHorizontal: 12, marginTop: 4, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 7 },
   actionBannerText: { fontSize: 12, fontWeight: '600', textAlign: 'center' },
   centerActions: { alignItems: 'center', paddingHorizontal: 16, paddingTop: 14, gap: 12 },
