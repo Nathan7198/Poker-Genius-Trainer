@@ -468,12 +468,47 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       const limpCost = state.heroPosition === 'SB' ? 0.5 : 1;
       const callCost = state.actionCtx.facingRaise ? state.actionCtx.raiseAmount : limpCost;
       const heroBet = heroAction === 'raise' ? raiseBB : heroAction === 'call' ? callCost : 0;
-      const newPot = state.pot + heroBet;
+      let preflopPot = state.pot + heroBet;
+
+      // ── Simulate remaining preflop actors after hero ───────────────────
+      // Any active bot who hasn't had a chance to respond to the final raise
+      // gets to call or fold now, so the flop pot reflects everyone's money.
+      if (heroAction !== 'fold') {
+        const pfOrder: Position[] = ['UTG', 'HJ', 'CO', 'BTN', 'SB', 'BB'];
+        const heroIdx = pfOrder.indexOf(state.heroPosition);
+
+        // (A) Bots who act AFTER hero in preflop order (e.g. SB/BB when hero is BTN)
+        for (const bot of state.players) {
+          const posIdx = pfOrder.indexOf(bot.position as typeof pfOrder[number]);
+          if (!bot.isActive || posIdx <= heroIdx) continue;
+          // Blinds already have chips committed; raise/open amount hero put in
+          const alreadyIn = bot.position === 'BB' ? 1 : bot.position === 'SB' ? 0.5 : 0;
+          const heroRaised = heroAction === 'raise';
+          const facingAmt = heroRaised ? raiseBB : (state.actionCtx.facingRaise ? state.actionCtx.raiseAmount : 0);
+          if (facingAmt > alreadyIn) {
+            const resp = simulateBotAction(bot.type, bot.position, true, facingAmt, preflopPot);
+            if (resp !== 'fold') preflopPot += facingAmt - alreadyIn;
+          }
+        }
+
+        // (B) Original raiser calls hero's 3-bet
+        //     They already have raiseAmount in — add the difference if they call.
+        if (heroAction === 'raise' && state.actionCtx.facingRaise && state.actionCtx.raisedByPosition) {
+          const origRaiser = state.players.find(
+            p => p.position === state.actionCtx.raisedByPosition && p.isActive,
+          );
+          if (origRaiser) {
+            const resp = simulateBotAction(origRaiser.type, origRaiser.position, true, raiseBB, preflopPot);
+            if (resp !== 'fold') preflopPot += Math.max(0, raiseBB - state.actionCtx.raiseAmount);
+          }
+        }
+      }
+
       const analysis = buildPreflopAnalysis(state.heroCards, state.heroPosition, heroAction, raiseBB, state.actionCtx, state.mainVillainType);
 
       if (heroAction === 'fold') {
         return {
-          ...state, phase: 'showdown', heroBet, pot: newPot,
+          ...state, phase: 'showdown', heroBet, pot: preflopPot,
           analysis, showAnalysis: true, lastHeroAction: heroAction,
           heroIsAggressor: false, showdownResult: 'villain', villainFolded: false,
         };
@@ -492,12 +527,12 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         : simulateVillainPostFlop(
             state.mainVillainType,
             analyzeBoardTexture(visibleBoard).texture,
-            newPot, 'none',
+            preflopPot, 'none',
             villainPlayer.cards, visibleBoard,
           );
 
       // Add villain's opening bet to pot immediately so the display updates at once
-      const flopPot = newPot + (villain?.betBB ?? 0);
+      const flopPot = preflopPot + (villain?.betBB ?? 0);
 
       return {
         ...state,
