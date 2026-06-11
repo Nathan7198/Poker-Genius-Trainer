@@ -222,7 +222,8 @@ function buildPreflopAnalysis(
 ): HandAnalysis {
   const notation = getHandNotation(heroCards[0], heroCards[1]);
   const equity = getEquity(notation);
-  const potOdds = calcPotOdds(actionCtx.raiseAmount, actionCtx.potSize);
+  const heroAlreadyIn = heroPosition === 'BB' ? 1 : heroPosition === 'SB' ? 0.5 : 0;
+  const potOdds = calcPotOdds(Math.max(0, actionCtx.raiseAmount - heroAlreadyIn), actionCtx.potSize);
   const strength = getHandStrength(notation);
   const inRange = GTO_RANGES[heroPosition].has(notation);
   const inDefense = BB_DEFENSE.has(notation);
@@ -293,8 +294,8 @@ function buildPostFlopAnalysis(
   const boardTexture = analyzeBoardTexture(board);
   const { hand: madeHand, rank: madeHandRank } = evaluateMadeHand(heroCards, board);
   const cbet = getCbetRecommendation(boardTexture.texture, madeHandRank, heroIsAggressor, facingBet);
-  // potBB already includes villain's bet — subtract it back to get pot before call
-  const potOddsPct = facingBet ? calcPotOdds(villainOpenAction.betBB, potBB - villainOpenAction.betBB) : 0;
+  // potBB already includes villain's bet, so it IS the pot before hero's call
+  const potOddsPct = facingBet ? calcPotOdds(villainOpenAction.betBB, potBB) : 0;
   const betBB = Math.round((betPct / 100) * potBB * 10) / 10;
   const mistakes: MistakeType[] = [];
 

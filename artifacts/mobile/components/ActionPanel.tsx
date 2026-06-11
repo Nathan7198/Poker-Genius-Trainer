@@ -37,7 +37,8 @@ export default function ActionPanel() {
   const notation = heroCards.length === 2 ? getHandNotation(heroCards[0], heroCards[1]) : '';
   const preflopEquity = notation ? getEquity(notation) : 50;
   const preflopStrength = notation ? getHandStrength(notation) : 'Weak';
-  const potOdds = calcPotOdds(actionCtx.raiseAmount, actionCtx.potSize);
+  const heroAlreadyIn = heroPosition === 'BB' ? 1 : heroPosition === 'SB' ? 0.5 : 0;
+  const potOdds = calcPotOdds(Math.max(0, actionCtx.raiseAmount - heroAlreadyIn), actionCtx.potSize);
   const showInfo = difficulty === 'Beginner' || difficulty === 'Intermediate';
   const showSuggestion = difficulty === 'Beginner';
 
@@ -223,7 +224,7 @@ export default function ActionPanel() {
             {heroCheckedStreet
               ? `You checked · Villain bet ${villainPostFlopAction.betPct}% pot (${villainPostFlopAction.betBB}BB)`
               : `Villain bets ${villainPostFlopAction.betPct}% pot (${villainPostFlopAction.betBB}BB)`}
-            {showInfo ? ` · Pot odds: ${calcPotOdds(villainPostFlopAction.betBB, state.pot - villainPostFlopAction.betBB)}%` : ''}
+            {showInfo ? ` · Pot odds: ${calcPotOdds(villainPostFlopAction.betBB, state.pot)}%` : ''}
           </Text>
         </View>
       ) : isPostFlop ? (
