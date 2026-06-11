@@ -239,6 +239,21 @@ export default function PlayScreen() {
               </View>
             )}
 
+            {/* Board cards at showdown */}
+            {board.length > 0 && (
+              <View style={[styles.sdBoardWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <Text style={[styles.showdownTitle, { color: colors.mutedForeground }]}>BOARD</Text>
+                <View style={styles.sdBoardRow}>
+                  {board.map((c, i) => (
+                    <View key={i} style={[styles.sdBoardCard, { backgroundColor: '#FAFAFA', borderColor: '#DDD' }]}>
+                      <Text style={[styles.sdBoardRank, { color: SUIT_COLORS[c.suit] ?? '#000' }]}>{c.rank}</Text>
+                      <Text style={[styles.sdBoardSuit, { color: SUIT_COLORS[c.suit] ?? '#000' }]}>{SUIT_SYMBOLS[c.suit] ?? c.suit}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+
             {/* Showdown card reveal (when villain didn't fold) */}
             {!state.villainFolded && villainFaceUpCards.length === 2 && heroHandResult && villainHandResult && (
               <View style={[styles.showdownCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -249,10 +264,9 @@ export default function PlayScreen() {
                     <Text style={[styles.showdownPlayer, { color: state.showdownResult === 'hero' ? '#27AE60' : colors.mutedForeground }]}>YOU</Text>
                     <View style={styles.showdownCards}>
                       {state.heroCards.map((c, i) => (
-                        <View key={i} style={[styles.sdCard, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
-                          <Text style={[styles.sdCardText, { color: SUIT_COLORS[c.suit] ?? colors.foreground }]}>
-                            {c.rank}{SUIT_SYMBOLS[c.suit] ?? c.suit}
-                          </Text>
+                        <View key={i} style={[styles.sdCard, { backgroundColor: '#FAFAFA', borderColor: '#DDD' }]}>
+                          <Text style={[styles.sdRank, { color: SUIT_COLORS[c.suit] ?? '#000' }]}>{c.rank}</Text>
+                          <Text style={[styles.sdSuit, { color: SUIT_COLORS[c.suit] ?? '#000' }]}>{SUIT_SYMBOLS[c.suit] ?? c.suit}</Text>
                         </View>
                       ))}
                     </View>
@@ -270,10 +284,9 @@ export default function PlayScreen() {
                     </Text>
                     <View style={styles.showdownCards}>
                       {villainFaceUpCards.map((c, i) => (
-                        <View key={i} style={[styles.sdCard, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
-                          <Text style={[styles.sdCardText, { color: SUIT_COLORS[c.suit] ?? colors.foreground }]}>
-                            {c.rank}{SUIT_SYMBOLS[c.suit] ?? c.suit}
-                          </Text>
+                        <View key={i} style={[styles.sdCard, { backgroundColor: '#FAFAFA', borderColor: '#DDD' }]}>
+                          <Text style={[styles.sdRank, { color: SUIT_COLORS[c.suit] ?? '#000' }]}>{c.rank}</Text>
+                          <Text style={[styles.sdSuit, { color: SUIT_COLORS[c.suit] ?? '#000' }]}>{SUIT_SYMBOLS[c.suit] ?? c.suit}</Text>
                         </View>
                       ))}
                     </View>
@@ -302,15 +315,23 @@ export default function PlayScreen() {
               </View>
             )}
 
-            <TouchableOpacity style={[styles.dealBtn, { backgroundColor: colors.gold }]} onPress={handleNewHand}>
-              <Text style={[styles.dealBtnText, { color: '#0D1B0F' }]}>NEXT HAND</Text>
-            </TouchableOpacity>
           </View>
         )}
       </ScrollView>
 
       <ActionPanel />
       <CoachModal />
+
+      {/* Fixed NEXT HAND bar — always visible above the tab bar */}
+      {isShowdown && (
+        <TouchableOpacity
+          style={[styles.nextHandFixed, { bottom: TAB_BAR_H + insets.bottom + 6, backgroundColor: colors.gold }]}
+          onPress={handleNewHand}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.nextHandFixedText}>NEXT HAND →</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
@@ -355,6 +376,20 @@ const styles = StyleSheet.create({
   resultBannerLabel: { fontSize: 22, fontWeight: '900', letterSpacing: 1 },
   resultBannerSub: { fontSize: 13, fontWeight: '600' },
 
+  // Board display at showdown
+  sdBoardWrap: {
+    width: '100%', borderRadius: 12, borderWidth: 1,
+    paddingVertical: 12, paddingHorizontal: 16, alignItems: 'center', gap: 10,
+  },
+  sdBoardRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', justifyContent: 'center' },
+  sdBoardCard: {
+    width: 48, height: 66, borderRadius: 7, borderWidth: 1.5,
+    alignItems: 'center', justifyContent: 'center', gap: 1,
+  },
+  sdBoardRank: { fontSize: 17, fontWeight: '900', lineHeight: 20 },
+  sdBoardSuit: { fontSize: 13, fontWeight: '700', lineHeight: 15 },
+
+  // Showdown hands
   showdownCard: {
     width: '100%', borderRadius: 12, borderWidth: 1,
     padding: 16, alignItems: 'center', gap: 14,
@@ -365,10 +400,11 @@ const styles = StyleSheet.create({
   showdownPlayer: { fontSize: 11, fontWeight: '800', letterSpacing: 1 },
   showdownCards: { flexDirection: 'row', gap: 6 },
   sdCard: {
-    width: 44, height: 58, borderRadius: 6, borderWidth: 1,
-    alignItems: 'center', justifyContent: 'center',
+    width: 50, height: 68, borderRadius: 8, borderWidth: 1.5,
+    alignItems: 'center', justifyContent: 'center', gap: 1,
   },
-  sdCardText: { fontSize: 16, fontWeight: '900' },
+  sdRank: { fontSize: 18, fontWeight: '900', lineHeight: 21 },
+  sdSuit: { fontSize: 13, fontWeight: '700', lineHeight: 15 },
   showdownHandName: { fontSize: 11, fontWeight: '700', textAlign: 'center' },
   showdownVs: { fontSize: 12, fontWeight: '600' },
 
@@ -377,4 +413,13 @@ const styles = StyleSheet.create({
   streetsRow: { flexDirection: 'row', gap: 10 },
   streetPip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 8, borderWidth: 1 },
   streetPipText: { fontSize: 12, fontWeight: '800', letterSpacing: 0.5 },
+
+  // Fixed NEXT HAND bar
+  nextHandFixed: {
+    position: 'absolute', left: 16, right: 16, zIndex: 20,
+    paddingVertical: 16, borderRadius: 14, alignItems: 'center',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3, shadowRadius: 6, elevation: 8,
+  },
+  nextHandFixedText: { fontSize: 17, fontWeight: '900', letterSpacing: 1.5, color: '#0D1B0F' },
 });
