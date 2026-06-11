@@ -418,7 +418,9 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         : simulateVillainPostFlop(state.mainVillainType, analyzeBoardTexture(flopCards.filter(c => c.faceUp)).texture, newPot);
 
       return {
-        ...state, phase: 'flop', heroBet, pot: newPot,
+        ...state,
+        players: state.players.map(p => ({ ...p, action: null })),
+        phase: 'flop', heroBet, pot: newPot,
         communityCards: flopCards, analysis, postFlopAnalysis: null,
         showAnalysis: true, lastHeroAction: heroAction,
         heroIsAggressor, villainPostFlopAction: villain, heroActsFirst,
@@ -472,24 +474,24 @@ function gameReducer(state: GameState, action: GameAction): GameState {
     }
 
     case 'ADVANCE_PHASE': {
+      const clearedPlayers = state.players.map(p => ({ ...p, action: null }));
       if (state.phase === 'flop') {
         const turnCards = revealCommunityCards(state.communityCards, 1);
         const board = turnCards.filter(c => c.faceUp);
-        // OOP hero acts first on every street; IP villain opens each street
         const villain = state.heroActsFirst
           ? null
           : simulateVillainPostFlop(state.mainVillainType, analyzeBoardTexture(board).texture, state.pot);
-        return { ...state, phase: 'turn', communityCards: turnCards, postFlopAnalysis: null, showAnalysis: false, villainPostFlopAction: villain };
+        return { ...state, players: clearedPlayers, phase: 'turn', communityCards: turnCards, postFlopAnalysis: null, showAnalysis: false, villainPostFlopAction: villain };
       }
       if (state.phase === 'turn') {
         const riverCards = state.communityCards.map(c => ({ ...c, faceUp: true }));
         const villain = state.heroActsFirst
           ? null
           : simulateVillainPostFlop(state.mainVillainType, analyzeBoardTexture(riverCards).texture, state.pot);
-        return { ...state, phase: 'river', communityCards: riverCards, postFlopAnalysis: null, showAnalysis: false, villainPostFlopAction: villain };
+        return { ...state, players: clearedPlayers, phase: 'river', communityCards: riverCards, postFlopAnalysis: null, showAnalysis: false, villainPostFlopAction: villain };
       }
       if (state.phase === 'river') {
-        return { ...state, phase: 'showdown', showAnalysis: false, postFlopAnalysis: null };
+        return { ...state, players: clearedPlayers, phase: 'showdown', showAnalysis: false, postFlopAnalysis: null };
       }
       return state;
     }
