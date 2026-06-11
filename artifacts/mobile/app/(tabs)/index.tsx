@@ -28,7 +28,7 @@ function cardLabel(rank: string, suit: string) {
 
 export default function PlayScreen() {
   const { state, startNewHand, setDifficulty } = useGame();
-  const { logHandHistory } = useStats();
+  const { logHandHistory, recordHandResult } = useStats();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const [showDifficultyPicker, setShowDifficultyPicker] = React.useState(false);
@@ -103,6 +103,12 @@ export default function PlayScreen() {
     };
 
     logHandHistory(entry);
+
+    const won = state.showdownResult === 'hero';
+    const profitBB = won
+      ? Math.round((state.pot - state.heroTotalInvestedBB) * 100) / 100
+      : Math.round(-state.heroTotalInvestedBB * 100) / 100;
+    recordHandResult(won, profitBB);
   }, [state.phase, state.handNumber]);
 
   const isIdle = state.phase === 'idle';

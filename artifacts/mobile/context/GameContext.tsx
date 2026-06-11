@@ -129,6 +129,8 @@ export interface GameState {
    * Null at all other times.
    */
   heroCheckedStreet: PostFlopStreet | null;
+  /** Total chips hero has put into the pot this hand (for profit tracking) */
+  heroTotalInvestedBB: number;
 }
 
 type GameAction =
@@ -157,7 +159,7 @@ function buildInitialState(): GameState {
     mainVillainPosition: 'BTN', heroActsFirst: false,
     postFlopStreetsDone: [], recentBoardSigs: [],
     showdownResult: null, villainFolded: false,
-    heroCheckedStreet: null,
+    heroCheckedStreet: null, heroTotalInvestedBB: 0,
   };
 }
 
@@ -470,7 +472,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         postFlopStreetsDone: [],
         recentBoardSigs: newRecentSigs,
         showdownResult: null, villainFolded: false,
-        heroCheckedStreet: null,
+        heroCheckedStreet: null, heroTotalInvestedBB: 0,
       };
     }
 
@@ -529,6 +531,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           ...state, phase: 'showdown', heroBet, pot: preflopPot,
           analysis, showAnalysis: true, lastHeroAction: heroAction,
           heroIsAggressor: false, showdownResult: 'villain', villainFolded: false,
+          heroTotalInvestedBB: heroAlreadyIn,
         };
       }
 
@@ -561,6 +564,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         heroIsAggressor, villainPostFlopAction: villain, heroActsFirst,
         postFlopStreetsDone: [],
         showdownResult: null, villainFolded: false,
+        heroTotalInvestedBB: heroAlreadyIn + heroBet,
       };
     }
 
@@ -657,6 +661,9 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         const newHistB = [...state.postFlopAnalysisHistory, pfaB];
         const newDoneB = [...state.postFlopStreetsDone, street];
 
+        const heroAddedB = heroAction === 'call' ? villainBet.betBB
+          : (heroAction === 'bet' || heroAction === 'raise') ? betBB : 0;
+
         if (heroAction === 'fold') {
           return {
             ...state, phase: 'showdown', pot: newPotB,
@@ -666,6 +673,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
             showdownResult: 'villain', villainFolded: false,
             heroCheckedStreet: null,
             lastHeroAction: heroAction as HeroAction,
+            heroTotalInvestedBB: state.heroTotalInvestedBB + heroAddedB,
           };
         }
 
@@ -677,6 +685,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
             showdownResult: 'hero', villainFolded: true,
             heroCheckedStreet: null,
             lastHeroAction: (heroAction === 'bet' ? 'raise' : heroAction) as HeroAction,
+            heroTotalInvestedBB: state.heroTotalInvestedBB + heroAddedB,
           };
         }
 
@@ -687,6 +696,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           postFlopStreetsDone: newDoneB,
           heroCheckedStreet: null,
           lastHeroAction: (heroAction === 'bet' ? 'raise' : heroAction) as HeroAction,
+          heroTotalInvestedBB: state.heroTotalInvestedBB + heroAddedB,
         };
       }
 
@@ -767,6 +777,9 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 
       const newHistory = [...state.postFlopAnalysisHistory, pfa];
 
+      const heroAdded = heroAction === 'call' ? callBB
+        : (heroAction === 'bet' || heroAction === 'raise') ? betBB : 0;
+
       // ── End-of-hand transitions ─────────────────────────────────────────
       if (heroAction === 'fold') {
         return {
@@ -777,6 +790,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           postFlopStreetsDone: [...state.postFlopStreetsDone, street],
           showdownResult: 'villain', villainFolded: false,
           heroCheckedStreet: null,
+          heroTotalInvestedBB: state.heroTotalInvestedBB + heroAdded,
         };
       }
 
@@ -790,6 +804,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           postFlopStreetsDone: [...state.postFlopStreetsDone, street],
           showdownResult: 'hero', villainFolded: true,
           heroCheckedStreet: null,
+          heroTotalInvestedBB: state.heroTotalInvestedBB + heroAdded,
         };
       }
 
@@ -800,6 +815,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         showAnalysis: true,
         postFlopStreetsDone: [...state.postFlopStreetsDone, street],
         heroCheckedStreet: null,
+        heroTotalInvestedBB: state.heroTotalInvestedBB + heroAdded,
       };
     }
 
