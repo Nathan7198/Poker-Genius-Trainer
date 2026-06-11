@@ -340,7 +340,7 @@ const styles = StyleSheet.create({
   diffOptionName: { fontSize: 14, fontWeight: '700' },
   diffOptionDesc: { fontSize: 11, marginTop: 2, lineHeight: 15 },
   scroll: { flex: 1 },
-  scrollContent: { paddingBottom: 8, paddingTop: 44 },
+  scrollContent: { paddingBottom: 8, paddingTop: 8 },
   actionBanner: { marginHorizontal: 12, marginTop: 4, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 7 },
   actionBannerText: { fontSize: 12, fontWeight: '600', textAlign: 'center' },
   centerActions: { alignItems: 'center', paddingHorizontal: 16, paddingTop: 14, gap: 12 },

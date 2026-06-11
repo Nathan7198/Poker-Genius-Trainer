@@ -26,15 +26,18 @@ function getSeatTopOffset(angleDeg: number): number {
   return Math.sin(degToRad(angleDeg)) > 0.05 ? -8 : -85;
 }
 
-const TABLE_H = 340;
-// cy is intentionally above the geometric centre so the lower half has
-// more room for community cards (centre band) and the hero area.
-const CY = 155;
-const RY = 105;
-
 export default function PokerTable() {
   const { state } = useGame();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
+
+  // Reserve space for: top bar (~52) + tab bar padding (~94) + worst-case action
+  // panel with bet-sizing open (~290) + scroll padding (~52) + hero row (~90) +
+  // small buffer (16).  That leaves the remainder for the felt oval.
+  // Clamp between 220 (minimum usable) and 340 (original size on tall screens).
+  const TABLE_H = Math.max(220, Math.min(340, height - 594));
+  // Keep CY and RY proportional to TABLE_H (original ratios: 155/340, 105/340)
+  const CY = Math.round(TABLE_H * 0.456);
+  const RY = Math.round(TABLE_H * 0.309);
 
   const tableW = width - 16;
   const cx = tableW / 2;
