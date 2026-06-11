@@ -48,6 +48,7 @@ export interface HandAnalysis {
   potOdds: number;
   mistakes: MistakeType[];
   advice: string;
+  exploitTip: string;
   handStrength: ReturnType<typeof getHandStrength>;
 }
 
@@ -68,6 +69,7 @@ export interface PostFlopStreetAnalysis {
   gtoSizingPct: number;
   mistakes: MistakeType[];
   advice: string;
+  exploitTip: string;
   heroIsAggressor: boolean;
 }
 
@@ -148,9 +150,53 @@ function flopSig(cards: Card[]): string {
     .join('|');
 }
 
+function getExploitTipPreflop(villainType: PlayerType): string {
+  switch (villainType) {
+    case 'Fish':
+      return 'vs Fish (VPIP 50%): Post-flop — size up big for value every street. They call with bottom pair. Never bluff.';
+    case 'Maniac':
+      return 'vs Maniac (PFR 50%): Their opening range is extremely wide. Even marginal hands have solid equity here.';
+    case 'Nit':
+      return 'vs Nit (VPIP 10%): Steal their blinds freely — they fold too much. When they 3-bet, fold unless you hold a premium.';
+    case 'LAG':
+      return 'vs LAG (VPIP 35%): 3-bet light in position to exploit their wide range. Post-flop, call down lighter — they bluff frequently.';
+    default:
+      return '';
+  }
+}
+
+function getExploitTipPostFlop(
+  villainType: PlayerType, heroAction: PostFlopHeroAction,
+  madeHandRank: number, facingBet: boolean, mistakes: MistakeType[],
+): string {
+  switch (villainType) {
+    case 'Fish':
+      if (mistakes.includes('bad_bluff')) return 'vs Fish: NEVER bluff — they call with any pair or draw. Check/fold with air.';
+      if (heroAction === 'bet' || heroAction === 'raise') return 'vs Fish: Good — size up bigger. Fish call too wide so maximize value every street.';
+      if (heroAction === 'check' && madeHandRank >= 3) return 'vs Fish: Consider betting for thin value — Fish call down with weak hands on every street.';
+      return 'vs Fish: Value bet relentlessly. Never bluff — they call everything down.';
+    case 'Maniac':
+      if (facingBet && heroAction === 'fold') return 'vs Maniac: Too tight! Maniac bets almost any two cards — call down much wider than GTO.';
+      if (heroAction === 'check' && madeHandRank >= 4) return 'vs Maniac: Smart check-trap — they will bet their entire range. Let them hang themselves.';
+      if (facingBet && (heroAction === 'call' || heroAction === 'raise')) return "vs Maniac: Good call-down. Their range is extremely wide — you're likely ahead.";
+      return 'vs Maniac: Let them overbet into you. Trap with strong hands and raise for value.';
+    case 'Nit':
+      if (facingBet) return 'vs Nit: When a Nit bets, they have strong holdings. Fold unless you have two pair or better.';
+      if (heroAction === 'bet' || heroAction === 'raise') return 'vs Nit: Good aggression — Nits fold to c-bets too often. Bet wide on dry boards.';
+      return "vs Nit: Steal freely when they're passive. Respect their raises — they rarely bluff.";
+    case 'LAG':
+      if (facingBet && heroAction === 'fold') return 'vs LAG: Too tight! LAG bluffs at high frequency — call down with top pair or better.';
+      if (heroAction === 'check' && madeHandRank >= 4) return 'vs LAG: Good check-trap. LAG will bet almost anything — let them bluff into you.';
+      if (facingBet && (heroAction === 'call' || heroAction === 'raise')) return 'vs LAG: Good call-down. Their high bluff frequency makes wider calls very profitable.';
+      return 'vs LAG: Call down lighter than GTO. Let them bluff into you, then raise for value.';
+    default:
+      return '';
+  }
+}
+
 function buildPreflopAnalysis(
   heroCards: Card[], heroPosition: Position, action: HeroAction,
-  raiseBB: number, actionCtx: ActionContext,
+  raiseBB: number, actionCtx: ActionContext, villainType: PlayerType,
 ): HandAnalysis {
   const notation = getHandNotation(heroCards[0], heroCards[1]);
   const equity = getEquity(notation);
@@ -205,10 +251,11 @@ function buildPreflopAnalysis(
     advice = `Standard open: 2.5–3BB. 3-bet to ~9–11BB total. Check your sizing.`;
   }
 
+  const exploitTip = getExploitTipPreflop(villainType);
   return {
     handNotation: notation, heroPosition, heroAction: action, raiseAmountBB: raiseBB,
     isGTO, gtoAction, gtoRaiseSize: gtoAction === 'raise' ? 3 : undefined,
-    equity, potOdds, mistakes, advice, handStrength: strength,
+    equity, potOdds, mistakes, advice, exploitTip, handStrength: strength,
   };
 }
 
@@ -216,6 +263,7 @@ function buildPostFlopAnalysis(
   heroCards: Card[], board: Card[], street: PostFlopStreet,
   heroAction: PostFlopHeroAction, betPct: number, potBB: number,
   villainAction: VillainPostFlopAction, heroIsAggressor: boolean,
+  villainType: PlayerType,
 ): PostFlopStreetAnalysis {
   const facingBet = villainAction.action === 'bet';
   const boardTexture = analyzeBoardTexture(board);
@@ -229,12 +277,16 @@ function buildPostFlopAnalysis(
     if (cbet.action === 'bet' && (heroAction === 'check' || heroAction === 'fold') && madeHandRank >= 3) {
       mistakes.push('missed_value');
     }
+    // vs Fish: bluffing is wrong on ALL board textures (they call everything)
+    const bluffBadBoard = boardTexture.texture === 'wet' || boardTexture.texture === 'monotone';
     if ((heroAction === 'bet' || heroAction === 'raise') && madeHandRank <= 1 &&
-        (boardTexture.texture === 'wet' || boardTexture.texture === 'monotone')) {
+        (villainType === 'Fish' || bluffBadBoard)) {
       mistakes.push('bad_bluff');
     }
   } else {
-    if (heroAction === 'fold' && madeHandRank >= 3) mistakes.push('folded_too_tight');
+    // vs Maniac: folding is wrong even with one pair — they bet too wide
+    const foldTooTightThreshold = villainType === 'Maniac' ? 2 : 3;
+    if (heroAction === 'fold' && madeHandRank >= foldTooTightThreshold) mistakes.push('folded_too_tight');
     if ((heroAction === 'call' || heroAction === 'raise') && madeHandRank <= 1 && villainAction.betPct >= 66) {
       mistakes.push('ignored_pot_odds');
     }
@@ -267,10 +319,11 @@ function buildPostFlopAnalysis(
     advice = cbet.reason;
   }
 
+  const exploitTip = getExploitTipPostFlop(villainType, heroAction, madeHandRank, facingBet, mistakes);
   return {
     street, boardTexture, madeHand, madeHandRank, heroAction, betPct, betBB,
     villainAction: villainAction.action, villainBetPct: villainAction.betPct, villainBetBB: villainAction.betBB,
-    cbetRecommendation: cbet, isGTO, gtoAction, gtoSizingPct, mistakes, advice, heroIsAggressor,
+    cbetRecommendation: cbet, isGTO, gtoAction, gtoSizingPct, mistakes, advice, exploitTip, heroIsAggressor,
   };
 }
 
@@ -400,7 +453,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       const { action: heroAction, raiseBB = 3 } = action;
       const heroBet = heroAction === 'raise' ? raiseBB : heroAction === 'call' ? state.actionCtx.raiseAmount : 0;
       const newPot = state.pot + heroBet;
-      const analysis = buildPreflopAnalysis(state.heroCards, state.heroPosition, heroAction, raiseBB, state.actionCtx);
+      const analysis = buildPreflopAnalysis(state.heroCards, state.heroPosition, heroAction, raiseBB, state.actionCtx, state.mainVillainType);
 
       if (heroAction === 'fold') {
         return { ...state, phase: 'showdown', heroBet, pot: newPot, analysis, showAnalysis: true, lastHeroAction: heroAction, heroIsAggressor: false };
@@ -443,6 +496,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         state.heroCards, board, street, heroAction, betPct, state.pot,
         resolvedVillainAction,
         state.heroIsAggressor,
+        state.mainVillainType,
       );
 
       const betBB = Math.round((betPct / 100) * state.pot * 10) / 10;

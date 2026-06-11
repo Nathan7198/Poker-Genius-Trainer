@@ -9,14 +9,14 @@ import { useStats } from '@/context/StatsContext';
 import { useColors } from '@/hooks/useColors';
 import {
   MISTAKE_LABELS, MISTAKE_TIPS, STRENGTH_COLORS, POSITION_DESCRIPTIONS,
-  MADE_HAND_COLORS, BOARD_TEXTURE_INFO,
+  MADE_HAND_COLORS, BOARD_TEXTURE_INFO, PLAYER_TYPE_INFO,
 } from '@/constants/pokerData';
 
 export default function CoachModal() {
   const { state, advancePhase, dismissAnalysis } = useGame();
   const { logMistake } = useStats();
   const colors = useColors();
-  const { analysis, postFlopAnalysis, showAnalysis, phase, lastHeroAction } = state;
+  const { analysis, postFlopAnalysis, showAnalysis, phase, lastHeroAction, mainVillainType } = state;
 
   const isPostFlopModal = showAnalysis && postFlopAnalysis !== null;
   const isPreflopModal = showAnalysis && analysis !== null && !isPostFlopModal;
@@ -133,6 +133,21 @@ export default function CoachModal() {
                 </Text>
               </View>
 
+              {/* Exploit tip */}
+              {!!pf.exploitTip && (() => {
+                const typeInfo = PLAYER_TYPE_INFO[mainVillainType];
+                return (
+                  <View style={[styles.section, { borderTopColor: colors.border }]}>
+                    <Text style={[styles.sectionTitle, { color: typeInfo.color }]}>
+                      EXPLOIT: {typeInfo.label.toUpperCase()} ({typeInfo.vpip}% VPIP)
+                    </Text>
+                    <View style={[styles.exploitBox, { backgroundColor: typeInfo.color + '18', borderColor: typeInfo.color + '40' }]}>
+                      <Text style={[styles.exploitText, { color: colors.foreground }]}>{pf.exploitTip}</Text>
+                    </View>
+                  </View>
+                );
+              })()}
+
               {/* Mistakes */}
               {pf.mistakes.length > 0 && (
                 <View style={[styles.section, { borderTopColor: colors.border }]}>
@@ -210,6 +225,21 @@ export default function CoachModal() {
                 {POSITION_DESCRIPTIONS[analysis.heroPosition]}
               </Text>
             </View>
+
+            {/* Exploit tip */}
+            {!!analysis.exploitTip && (() => {
+              const typeInfo = PLAYER_TYPE_INFO[mainVillainType];
+              return (
+                <View style={[styles.section, { borderTopColor: colors.border }]}>
+                  <Text style={[styles.sectionTitle, { color: typeInfo.color }]}>
+                    EXPLOIT: {typeInfo.label.toUpperCase()} ({typeInfo.vpip}% VPIP)
+                  </Text>
+                  <View style={[styles.exploitBox, { backgroundColor: typeInfo.color + '18', borderColor: typeInfo.color + '40' }]}>
+                    <Text style={[styles.exploitText, { color: colors.foreground }]}>{analysis.exploitTip}</Text>
+                  </View>
+                </View>
+              );
+            })()}
 
             {analysis.mistakes.length > 0 && (
               <View style={[styles.section, { borderTopColor: colors.border }]}>
@@ -297,6 +327,8 @@ const styles = StyleSheet.create({
   mistakeItem: { borderRadius: 8, borderWidth: 1, padding: 10, marginBottom: 6 },
   mistakeLabel: { fontSize: 12, fontWeight: '700', marginBottom: 3 },
   mistakeTip: { fontSize: 12, lineHeight: 18 },
+  exploitBox: { borderRadius: 8, borderWidth: 1, padding: 12 },
+  exploitText: { fontSize: 13, lineHeight: 20, fontWeight: '500' },
 
   nextBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
