@@ -325,17 +325,9 @@ const styles = StyleSheet.create({
   actionBanner: { marginHorizontal: 12, marginTop: 4, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 7 },
   actionBannerText: { fontSize: 12, fontWeight: '600', textAlign: 'center' },
   centerActions: { alignItems: 'center', paddingHorizontal: 16, paddingTop: 14, gap: 12 },
-  showdownContainer: { flex: 1, paddingHorizontal: 16, paddingTop: 14, gap: 12 },
   dealBtn: { paddingVertical: 16, paddingHorizontal: 48, borderRadius: 14, alignItems: 'center' },
   dealBtnText: { fontSize: 18, fontWeight: '900', letterSpacing: 2 },
   idleSubtext: { fontSize: 11, textAlign: 'center', fontStyle: 'italic' },
-
-  resultBanner: {
-    width: '100%', borderRadius: 14, borderWidth: 1.5,
-    paddingVertical: 16, paddingHorizontal: 20, alignItems: 'center', gap: 4,
-  },
-  resultBannerLabel: { fontSize: 22, fontWeight: '900', letterSpacing: 1 },
-  resultBannerSub: { fontSize: 13, fontWeight: '600' },
 
   // Showdown footer (outside ScrollView — always fully visible)
   sdFooter: { borderTopWidth: 1, paddingTop: 2 },
@@ -357,7 +349,7 @@ const styles = StyleSheet.create({
   sdHandName: { fontSize: 14, fontWeight: '800' },
   sdVs: { fontSize: 12, fontWeight: '600', paddingHorizontal: 10 },
 
-  // NEXT HAND bar (inline sibling of ScrollView)
+  // NEXT HAND bar (inside the showdown footer)
   nextHandBar: {
     paddingHorizontal: 16,
     paddingTop: 8,
