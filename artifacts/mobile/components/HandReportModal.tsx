@@ -9,7 +9,7 @@ import { useColors } from '@/hooks/useColors';
 import {
   MADE_HAND_COLORS, BOARD_TEXTURE_INFO, PLAYER_TYPE_INFO, MISTAKE_LABELS, MISTAKE_TIPS,
 } from '@/constants/pokerData';
-import type { PostFlopStreetAnalysis } from '@/context/GameContext';
+import type { PostFlopStreetAnalysis, VillainActionType } from '@/context/GameContext';
 
 interface Props {
   visible: boolean;
@@ -24,10 +24,18 @@ export default function HandReportModal({ visible, onClose }: Props) {
   if (!visible || !analysis) return null;
 
   const villainInfo = PLAYER_TYPE_INFO[mainVillainType];
-  const allGTO = [analysis.isGTO, ...postFlopAnalysisHistory.map(s => s.isGTO)];
+
+  const heroFoldedPreflop = analysis.heroAction === 'fold';
+
+  const allGTO = [
+    ...(heroFoldedPreflop ? [] : [analysis.isGTO]),
+    ...postFlopAnalysisHistory
+      .filter(s => s.heroAction !== 'fold')
+      .map(s => s.isGTO),
+  ];
   const gtoCount = allGTO.filter(Boolean).length;
   const totalStreets = allGTO.length;
-  const overallGood = gtoCount === totalStreets;
+  const overallGood = totalStreets > 0 && gtoCount === totalStreets;
 
   function haptic() {
     if (Platform.OS !== 'web') {
@@ -70,62 +78,74 @@ export default function HandReportModal({ visible, onClose }: Props) {
     return s.gtoAction.charAt(0).toUpperCase() + s.gtoAction.slice(1);
   }
 
+  function villainActionLine(act: VillainActionType, pct: number, bb: number): string | null {
+    if (act === 'check') return null;
+    if (act === 'bet')   return `Villain bet ${pct}% pot (${bb}BB)`;
+    if (act === 'raise') return `Villain raised to ${bb}BB`;
+    if (act === 'call')  return `Villain called ${bb}BB`;
+    return null;
+  }
+
+  function villainResponseLine(resp: VillainActionType | null, respBB: number): string | null {
+    if (!resp || resp === 'fold') return null;
+    if (resp === 'call')  return `Villain called`;
+    if (resp === 'raise') return `Villain re-raised to ${respBB}BB`;
+    if (resp === 'check') return `Villain checked behind`;
+    return null;
+  }
+
   function sizingVerdictPreflop(): SizingVerdict | null {
     if (analysis!.heroAction !== 'raise') return null;
     const actual = analysis!.raiseAmountBB;
-    const ideal = analysis!.gtoRaiseSize;
+    const ideal  = analysis!.gtoRaiseSize;
     if (!ideal) return null;
     const good = Math.abs(actual - ideal) <= 0.5;
     return {
-      yourSize: `${actual}BB`,
+      yourSize:  `${actual}BB`,
       idealSize: `${ideal}BB`,
       good,
       reason: good
         ? null
         : actual < ideal
-          ? `Too small — ${actual < 2 ? 'minimum is 2BB, ' : ''}standard open is ${ideal}BB`
+          ? `Too small — ${actual < 2 ? 'minimum is 2BB, ' : ''}standard is ${ideal}BB`
           : `Oversized — standard open is ${ideal}BB; sizing down protects your range`,
     };
   }
 
   function sizingVerdictPostFlop(s: PostFlopStreetAnalysis): SizingVerdict | null {
+    if (s.heroAction === 'fold') return null;
     const heroBet = s.heroAction === 'bet' || s.heroAction === 'raise';
-    const gtoSz = s.gtoSizingPct || s.cbetRecommendation.sizingPct;
+    const gtoSz   = s.gtoSizingPct || s.cbetRecommendation.sizingPct;
 
     if (!heroBet && gtoSz === 0) return null;
 
     if (!heroBet && gtoSz > 0) {
       return {
-        yourSize: null,
+        yourSize:  null,
         idealSize: `${gtoSz}% pot`,
-        good: false,
-        reason: `GTO would bet ${gtoSz}% pot here — you left money on the table by not betting`,
+        good:      false,
+        reason:    `GTO calls for a ${gtoSz}% pot bet here — not betting left money on the table`,
       };
     }
 
     if (heroBet) {
-      const pot = s.betPct > 0 ? Math.round(s.betBB / (s.betPct / 100) * 10) / 10 : null;
+      const pot     = s.betPct > 0 ? Math.round(s.betBB / (s.betPct / 100) * 10) / 10 : null;
       const idealBB = pot && gtoSz > 0 ? Math.round((gtoSz / 100) * pot * 10) / 10 : null;
-      const good = gtoSz === 0 || Math.abs(s.betPct - gtoSz) <= 15;
+      const good    = gtoSz === 0 || Math.abs(s.betPct - gtoSz) <= 15;
 
       if (gtoSz === 0) {
-        return {
-          yourSize: `${s.betPct}% pot (${s.betBB}BB)`,
-          idealSize: null,
-          good: true,
-          reason: null,
-        };
+        return { yourSize: `${s.betPct}% pot (${s.betBB}BB)`, idealSize: null, good: true, reason: null };
       }
 
       return {
-        yourSize: `${s.betPct}% pot (${s.betBB}BB)`,
+        yourSize:  `${s.betPct}% pot (${s.betBB}BB)`,
         idealSize: `${gtoSz}% pot${idealBB ? ` (${idealBB}BB)` : ''}`,
         good,
         reason: good
           ? null
           : s.betPct < gtoSz - 15
-            ? `Undersized — ${s.betPct}% gives villain good odds to call with draws; ${gtoSz}% charges them correctly`
-            : `Oversized — ${s.betPct}% may fold out worse hands you want to get value from; ${gtoSz}% is optimal`,
+            ? `Undersized — ${s.betPct}% lets villain call draws cheaply; ${gtoSz}% charges them correctly`
+            : `Oversized — ${s.betPct}% folds out weaker hands you want calls from; ${gtoSz}% is optimal`,
       };
     }
 
@@ -160,18 +180,18 @@ export default function HandReportModal({ visible, onClose }: Props) {
             backgroundColor: overallGood ? '#27AE6015' : '#E67E2215',
             borderBottomColor: overallGood ? '#27AE6030' : '#E67E2230',
           }]}>
-            <Feather
-              name={overallGood ? 'award' : 'target'}
-              size={14}
-              color={overallGood ? '#27AE60' : '#E67E22'}
-            />
+            <Feather name={overallGood ? 'award' : 'target'} size={14}
+              color={overallGood ? '#27AE60' : '#E67E22'} />
             <Text style={[styles.scoreText, { color: overallGood ? '#27AE60' : '#E67E22' }]}>
-              {gtoCount}/{totalStreets} streets played optimally
-              {overallGood ? ' — clean hand!' : ` — ${totalStreets - gtoCount} area${totalStreets - gtoCount > 1 ? 's' : ''} to improve`}
+              {totalStreets === 0
+                ? 'Folded preflop — no streets to score'
+                : `${gtoCount}/${totalStreets} streets played optimally${overallGood ? ' — clean hand!' : ` — ${totalStreets - gtoCount} area${totalStreets - gtoCount > 1 ? 's' : ''} to improve`}`
+              }
             </Text>
           </View>
 
-          <ScrollView style={styles.body} showsVerticalScrollIndicator={false} contentContainerStyle={styles.bodyContent}>
+          <ScrollView style={styles.body} showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.bodyContent}>
 
             {/* ── PREFLOP ── */}
             <StreetSection
@@ -184,14 +204,23 @@ export default function HandReportModal({ visible, onClose }: Props) {
               advice={analysis.advice}
               mistakes={analysis.mistakes.map(m => ({ label: MISTAKE_LABELS[m], tip: MISTAKE_TIPS[m] }))}
               extra={`Equity ${analysis.equity}%${analysis.potOdds > 0 ? `  ·  Pot odds ${analysis.potOdds}%` : ''}`}
+              heroFolded={heroFoldedPreflop}
+              villainFolded={false}
+              facingLine={null}
+              villainOutcomeLine={null}
               colors={colors}
             />
 
             {/* ── POST-FLOP STREETS ── */}
             {postFlopAnalysisHistory.map((s, i) => {
-              const textureInfo = BOARD_TEXTURE_INFO[s.boardTexture.texture];
+              const textureInfo   = BOARD_TEXTURE_INFO[s.boardTexture.texture];
               const madeHandColor = MADE_HAND_COLORS[s.madeHand];
-              const sv = sizingVerdictPostFlop(s);
+              const sv            = sizingVerdictPostFlop(s);
+              const heroFolded    = s.heroAction === 'fold';
+              const villainFolded = s.villainResponse === 'fold';
+              const facingLine    = villainActionLine(s.villainAction, s.villainBetPct, s.villainBetBB);
+              const outcomeLine   = villainResponseLine(s.villainResponse, s.villainResponseBetBB);
+
               return (
                 <StreetSection
                   key={`${s.street}-${i}`}
@@ -206,12 +235,16 @@ export default function HandReportModal({ visible, onClose }: Props) {
                   sizing={sv}
                   advice={s.advice}
                   mistakes={s.mistakes.map(m => ({ label: MISTAKE_LABELS[m], tip: MISTAKE_TIPS[m] }))}
+                  heroFolded={heroFolded}
+                  villainFolded={villainFolded}
+                  facingLine={facingLine}
+                  villainOutcomeLine={outcomeLine}
                   colors={colors}
                 />
               );
             })}
 
-            {postFlopAnalysisHistory.length === 0 && (
+            {postFlopAnalysisHistory.length === 0 && !heroFoldedPreflop && (
               <View style={[styles.noStreetsNote, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
                 <Feather name="info" size={14} color={colors.mutedForeground} />
                 <Text style={[styles.noStreetsText, { color: colors.mutedForeground }]}>
@@ -256,7 +289,9 @@ interface MistakeItem {
 function StreetSection({
   streetName, subTitle, madeHand, madeHandColor, isGTO,
   yourAction, gtoAction, actionsMatch,
-  sizing, advice, mistakes, extra, colors,
+  sizing, advice, mistakes, extra,
+  heroFolded, villainFolded, facingLine, villainOutcomeLine,
+  colors,
 }: {
   streetName: string;
   subTitle?: string;
@@ -270,12 +305,21 @@ function StreetSection({
   advice: string;
   mistakes: MistakeItem[];
   extra?: string;
+  heroFolded: boolean;
+  villainFolded: boolean;
+  facingLine: string | null;
+  villainOutcomeLine: string | null;
   colors: any;
 }) {
-  const gtoColor = isGTO ? '#27AE60' : '#E74C3C';
+  const gtoColor = heroFolded ? '#E74C3C' : (isGTO ? '#27AE60' : '#E74C3C');
 
   return (
-    <View style={[styles.streetBlock, { borderColor: colors.border }]}>
+    <View style={[
+      styles.streetBlock,
+      { borderColor: heroFolded ? '#E74C3C50' : (villainFolded ? '#27AE6050' : colors.border) },
+      heroFolded && { backgroundColor: '#E74C3C08' },
+      villainFolded && !heroFolded && { backgroundColor: '#27AE6008' },
+    ]}>
 
       {/* Street header */}
       <View style={styles.streetHeader}>
@@ -290,86 +334,152 @@ function StreetSection({
             </View>
           )}
         </View>
-        <View style={[styles.gtoBadge, { backgroundColor: gtoColor + '18', borderColor: gtoColor + '45' }]}>
-          <Feather name={isGTO ? 'check' : 'alert-triangle'} size={10} color={gtoColor} />
-          <Text style={[styles.gtoBadgeText, { color: gtoColor }]}>{isGTO ? 'GTO' : 'Improve'}</Text>
-        </View>
+
+        {heroFolded ? (
+          <View style={[styles.foldBadge, { backgroundColor: '#E74C3C20', borderColor: '#E74C3C55' }]}>
+            <Feather name="x" size={10} color="#E74C3C" />
+            <Text style={[styles.foldBadgeText, { color: '#E74C3C' }]}>FOLDED</Text>
+          </View>
+        ) : (
+          <View style={[styles.gtoBadge, { backgroundColor: gtoColor + '18', borderColor: gtoColor + '45' }]}>
+            <Feather name={isGTO ? 'check' : 'alert-triangle'} size={10} color={gtoColor} />
+            <Text style={[styles.gtoBadgeText, { color: gtoColor }]}>{isGTO ? 'GTO' : 'Improve'}</Text>
+          </View>
+        )}
       </View>
 
-      {/* Action row */}
-      <View style={[styles.actionRow, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
-        <View style={styles.actionHalf}>
-          <Text style={[styles.actionLabel, { color: colors.mutedForeground }]}>YOUR ACTION</Text>
-          <Text style={[styles.actionValue, { color: isGTO ? '#27AE60' : '#E74C3C' }]} numberOfLines={2}>
-            {yourAction}
+      {/* Facing context — only when villain bet or raised first */}
+      {facingLine && (
+        <View style={[styles.facingRow, { backgroundColor: '#E74C3C12', borderColor: '#E74C3C30' }]}>
+          <Feather name="alert-circle" size={11} color="#E74C3C" />
+          <Text style={[styles.facingText, { color: colors.foreground }]}>
+            <Text style={{ fontWeight: '800', color: '#E74C3C' }}>Facing: </Text>
+            {facingLine}
           </Text>
         </View>
-        <View style={[styles.actionDivider, { backgroundColor: colors.border }]} />
-        <View style={styles.actionHalf}>
-          <Text style={[styles.actionLabel, { color: colors.mutedForeground }]}>GTO PLAY</Text>
-          <Text style={[styles.actionValue, { color: '#27AE60' }]} numberOfLines={2}>
-            {actionsMatch ? '✓ ' : ''}{gtoAction}
-          </Text>
-        </View>
-      </View>
+      )}
 
-      {/* Sizing comparison */}
-      {sizing && (
-        <View style={[
-          styles.sizingRow,
-          { backgroundColor: sizing.good ? '#27AE6010' : '#E67E2210', borderColor: sizing.good ? '#27AE6030' : '#E67E2230' },
-        ]}>
-          <View style={styles.sizingHeader}>
-            <Feather name="sliders" size={11} color={sizing.good ? '#27AE60' : '#E67E22'} />
-            <Text style={[styles.sizingTitle, { color: sizing.good ? '#27AE60' : '#E67E22' }]}>
-              RAISE / BET SIZE
-            </Text>
+      {/* Hero folded — large prominent banner */}
+      {heroFolded ? (
+        <View style={[styles.heroFoldBanner, { borderColor: '#E74C3C40' }]}>
+          <View style={styles.heroFoldBannerTop}>
+            <Feather name="x-circle" size={18} color="#E74C3C" />
+            <Text style={styles.heroFoldBannerTitle}>YOU FOLDED — HAND ENDED HERE</Text>
           </View>
-          <View style={styles.sizingValues}>
-            {sizing.yourSize && (
-              <View style={styles.sizingItem}>
-                <Text style={[styles.sizingKey, { color: colors.mutedForeground }]}>You</Text>
-                <Text style={[styles.sizingVal, { color: sizing.good ? '#27AE60' : '#E74C3C' }]}>
-                  {sizing.yourSize}
-                </Text>
-              </View>
-            )}
-            {sizing.idealSize && (
-              <View style={styles.sizingItem}>
-                <Text style={[styles.sizingKey, { color: colors.mutedForeground }]}>Ideal</Text>
-                <Text style={[styles.sizingVal, { color: '#27AE60' }]}>
-                  {sizing.idealSize}
-                </Text>
-              </View>
-            )}
-          </View>
-          {sizing.reason && (
-            <Text style={[styles.sizingReason, { color: colors.foreground }]}>{sizing.reason}</Text>
+          {advice ? (
+            <Text style={[styles.heroFoldBannerAdvice, { color: colors.foreground }]}>{advice}</Text>
+          ) : null}
+          {mistakes.length > 0 && (
+            <View style={styles.foldMistakesRow}>
+              {mistakes.map((m, i) => (
+                <View key={i} style={styles.foldMistakePill}>
+                  <Feather name="alert-triangle" size={9} color="#E74C3C" />
+                  <Text style={styles.foldMistakePillText}>{m.label}</Text>
+                </View>
+              ))}
+            </View>
           )}
         </View>
-      )}
-
-      {/* Advice */}
-      <Text style={[styles.advice, { color: colors.foreground }]}>{advice}</Text>
-
-      {/* Extra info */}
-      {extra && (
-        <Text style={[styles.extra, { color: colors.mutedForeground }]}>{extra}</Text>
-      )}
-
-      {/* Mistakes */}
-      {mistakes.length > 0 && (
-        <View style={styles.mistakesContainer}>
-          {mistakes.map((m, i) => (
-            <View key={i} style={[styles.mistakeRow, { backgroundColor: '#E74C3C10', borderColor: '#E74C3C25' }]}>
-              <View style={styles.mistakeHeader}>
-                <Feather name="alert-circle" size={11} color="#E74C3C" />
-                <Text style={styles.mistakeLabel}>{m.label}</Text>
-              </View>
-              <Text style={[styles.mistakeTip, { color: colors.foreground }]}>{m.tip}</Text>
+      ) : (
+        <>
+          {/* YOUR ACTION / GTO PLAY two-column row */}
+          <View style={[styles.actionRow, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
+            <View style={styles.actionHalf}>
+              <Text style={[styles.actionLabel, { color: colors.mutedForeground }]}>YOUR ACTION</Text>
+              <Text style={[styles.actionValue, { color: isGTO ? '#27AE60' : '#E74C3C' }]} numberOfLines={2}>
+                {yourAction}
+              </Text>
             </View>
-          ))}
-        </View>
+            <View style={[styles.actionDivider, { backgroundColor: colors.border }]} />
+            <View style={styles.actionHalf}>
+              <Text style={[styles.actionLabel, { color: colors.mutedForeground }]}>GTO PLAY</Text>
+              <Text style={[styles.actionValue, { color: '#27AE60' }]} numberOfLines={2}>
+                {actionsMatch ? '✓ ' : ''}{gtoAction}
+              </Text>
+            </View>
+          </View>
+
+          {/* Villain folded banner */}
+          {villainFolded && (
+            <View style={styles.villainFoldBanner}>
+              <Feather name="check-circle" size={15} color="#27AE60" />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.villainFoldTitle}>VILLAIN FOLDED — Pot won</Text>
+                <Text style={[styles.villainFoldSub, { color: colors.mutedForeground }]}>
+                  Your bet had fold equity — villain gave up the hand.
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {/* Villain outcome line (called / raised) */}
+          {!villainFolded && villainOutcomeLine && (
+            <View style={[styles.outcomeRow, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
+              <Feather name="user" size={11} color={colors.mutedForeground} />
+              <Text style={[styles.outcomeText, { color: colors.foreground }]}>
+                <Text style={[styles.outcomeKey, { color: colors.mutedForeground }]}>Outcome: </Text>
+                {villainOutcomeLine}
+              </Text>
+            </View>
+          )}
+
+          {/* Sizing comparison */}
+          {sizing && (
+            <View style={[
+              styles.sizingRow,
+              { backgroundColor: sizing.good ? '#27AE6010' : '#E67E2210', borderColor: sizing.good ? '#27AE6030' : '#E67E2230' },
+            ]}>
+              <View style={styles.sizingHeader}>
+                <Feather name="sliders" size={11} color={sizing.good ? '#27AE60' : '#E67E22'} />
+                <Text style={[styles.sizingTitle, { color: sizing.good ? '#27AE60' : '#E67E22' }]}>
+                  RAISE / BET SIZE
+                </Text>
+              </View>
+              <View style={styles.sizingValues}>
+                {sizing.yourSize && (
+                  <View style={styles.sizingItem}>
+                    <Text style={[styles.sizingKey, { color: colors.mutedForeground }]}>You</Text>
+                    <Text style={[styles.sizingVal, { color: sizing.good ? '#27AE60' : '#E74C3C' }]}>
+                      {sizing.yourSize}
+                    </Text>
+                  </View>
+                )}
+                {sizing.idealSize && (
+                  <View style={styles.sizingItem}>
+                    <Text style={[styles.sizingKey, { color: colors.mutedForeground }]}>Ideal</Text>
+                    <Text style={[styles.sizingVal, { color: '#27AE60' }]}>{sizing.idealSize}</Text>
+                  </View>
+                )}
+              </View>
+              {sizing.reason && (
+                <Text style={[styles.sizingReason, { color: colors.foreground }]}>{sizing.reason}</Text>
+              )}
+            </View>
+          )}
+
+          {/* Advice */}
+          <Text style={[styles.advice, { color: colors.foreground }]}>{advice}</Text>
+
+          {/* Extra info */}
+          {extra && (
+            <Text style={[styles.extra, { color: colors.mutedForeground }]}>{extra}</Text>
+          )}
+
+          {/* Mistakes */}
+          {mistakes.length > 0 && (
+            <View style={styles.mistakesContainer}>
+              {mistakes.map((m, i) => (
+                <View key={i} style={[styles.mistakeRow, { backgroundColor: '#E74C3C10', borderColor: '#E74C3C25' }]}>
+                  <View style={styles.mistakeHeader}>
+                    <Feather name="alert-circle" size={11} color="#E74C3C" />
+                    <Text style={styles.mistakeLabel}>{m.label}</Text>
+                  </View>
+                  <Text style={[styles.mistakeTip, { color: colors.foreground }]}>{m.tip}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+        </>
       )}
 
     </View>
@@ -379,18 +489,18 @@ function StreetSection({
 // ── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.7)' },
-  sheet: { borderTopLeftRadius: 22, borderTopRightRadius: 22, maxHeight: '90%', paddingBottom: 24 },
+  backdrop:  { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.7)' },
+  sheet:     { borderTopLeftRadius: 22, borderTopRightRadius: 22, maxHeight: '90%', paddingBottom: 24 },
 
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1,
   },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 },
-  headerTitle: { fontSize: 13, fontWeight: '900', letterSpacing: 1.5 },
-  handPill: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
-  handPillText: { fontSize: 13, fontWeight: '800' },
-  villainPill: { borderRadius: 6, borderWidth: 1, paddingHorizontal: 7, paddingVertical: 3 },
+  headerLeft:      { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 },
+  headerTitle:     { fontSize: 13, fontWeight: '900', letterSpacing: 1.5 },
+  handPill:        { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
+  handPillText:    { fontSize: 13, fontWeight: '800' },
+  villainPill:     { borderRadius: 6, borderWidth: 1, paddingHorizontal: 7, paddingVertical: 3 },
   villainPillText: { fontSize: 11, fontWeight: '700' },
 
   scoreBanner: {
@@ -399,7 +509,7 @@ const styles = StyleSheet.create({
   },
   scoreText: { fontSize: 12, fontWeight: '700', flex: 1 },
 
-  body: { flex: 1 },
+  body:        { flex: 1 },
   bodyContent: { paddingHorizontal: 14, paddingTop: 10, paddingBottom: 8, gap: 10 },
 
   noStreetsNote: {
@@ -420,41 +530,98 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13, paddingVertical: 12,
     gap: 9,
   },
-  streetHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 },
+  streetHeader:     { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 },
   streetHeaderLeft: { flex: 1, gap: 4 },
-  streetName: { fontSize: 13, fontWeight: '900', letterSpacing: 1.2 },
-  streetSub: { fontSize: 11, fontWeight: '600' },
-  madeHandPill: { alignSelf: 'flex-start', borderRadius: 5, borderWidth: 1, paddingHorizontal: 7, paddingVertical: 2 },
+  streetName:       { fontSize: 13, fontWeight: '900', letterSpacing: 1.2 },
+  streetSub:        { fontSize: 11, fontWeight: '600' },
+  madeHandPill: {
+    alignSelf: 'flex-start', borderRadius: 5, borderWidth: 1,
+    paddingHorizontal: 7, paddingVertical: 2,
+  },
   madeHandPillText: { fontSize: 10, fontWeight: '700' },
+
+  foldBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    borderRadius: 7, borderWidth: 1, paddingHorizontal: 8, paddingVertical: 4,
+  },
+  foldBadgeText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.3 },
+
   gtoBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     borderRadius: 7, borderWidth: 1, paddingHorizontal: 8, paddingVertical: 4,
   },
   gtoBadgeText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.3 },
 
+  // Facing villain bet row
+  facingRow: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 7,
+    borderRadius: 8, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 8,
+  },
+  facingText: { fontSize: 12, lineHeight: 17, flex: 1 },
+
+  // Hero fold banner
+  heroFoldBanner: {
+    borderRadius: 10, borderWidth: 1.5,
+    backgroundColor: '#E74C3C12',
+    padding: 12, gap: 8,
+  },
+  heroFoldBannerTop: {
+    flexDirection: 'row', alignItems: 'center', gap: 9,
+  },
+  heroFoldBannerTitle: {
+    fontSize: 14, fontWeight: '900', color: '#E74C3C', flex: 1, letterSpacing: 0.3,
+  },
+  heroFoldBannerAdvice: { fontSize: 13, lineHeight: 19 },
+  foldMistakesRow:   { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  foldMistakePill: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: '#E74C3C20', borderRadius: 6,
+    paddingHorizontal: 8, paddingVertical: 4,
+  },
+  foldMistakePillText: { fontSize: 10, fontWeight: '700', color: '#E74C3C' },
+
+  // Villain fold banner
+  villainFoldBanner: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 9,
+    borderRadius: 10, borderWidth: 1.5,
+    borderColor: '#27AE6050',
+    backgroundColor: '#27AE6012',
+    paddingHorizontal: 12, paddingVertical: 10,
+  },
+  villainFoldTitle: { fontSize: 13, fontWeight: '900', color: '#27AE60', marginBottom: 2 },
+  villainFoldSub:   { fontSize: 11, lineHeight: 16 },
+
+  // Outcome row (called/raised)
+  outcomeRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 7,
+    borderRadius: 8, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 7,
+  },
+  outcomeText: { fontSize: 12, flex: 1 },
+  outcomeKey:  { fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
+
   actionRow: {
     flexDirection: 'row', borderRadius: 10, borderWidth: 1, overflow: 'hidden',
   },
-  actionHalf: { flex: 1, paddingHorizontal: 11, paddingVertical: 9, gap: 3 },
+  actionHalf:    { flex: 1, paddingHorizontal: 11, paddingVertical: 9, gap: 3 },
   actionDivider: { width: 1 },
-  actionLabel: { fontSize: 9, fontWeight: '800', letterSpacing: 0.8 },
-  actionValue: { fontSize: 13, fontWeight: '800', lineHeight: 17 },
+  actionLabel:   { fontSize: 9, fontWeight: '800', letterSpacing: 0.8 },
+  actionValue:   { fontSize: 13, fontWeight: '800', lineHeight: 17 },
 
-  sizingRow: { borderRadius: 10, borderWidth: 1, padding: 11, gap: 7 },
+  sizingRow:    { borderRadius: 10, borderWidth: 1, padding: 11, gap: 7 },
   sizingHeader: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  sizingTitle: { fontSize: 9, fontWeight: '800', letterSpacing: 0.8 },
+  sizingTitle:  { fontSize: 9, fontWeight: '800', letterSpacing: 0.8 },
   sizingValues: { flexDirection: 'row', gap: 18 },
-  sizingItem: { gap: 2 },
-  sizingKey: { fontSize: 9, fontWeight: '700', letterSpacing: 0.5 },
-  sizingVal: { fontSize: 14, fontWeight: '800' },
+  sizingItem:   { gap: 2 },
+  sizingKey:    { fontSize: 9, fontWeight: '700', letterSpacing: 0.5 },
+  sizingVal:    { fontSize: 14, fontWeight: '800' },
   sizingReason: { fontSize: 12, lineHeight: 17, fontStyle: 'italic' },
 
   advice: { fontSize: 13, lineHeight: 19 },
-  extra: { fontSize: 11, fontWeight: '600' },
+  extra:  { fontSize: 11, fontWeight: '600' },
 
   mistakesContainer: { gap: 6 },
   mistakeRow: { borderRadius: 8, borderWidth: 1, padding: 9, gap: 4 },
   mistakeHeader: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   mistakeLabel: { fontSize: 11, fontWeight: '800', color: '#E74C3C' },
-  mistakeTip: { fontSize: 12, lineHeight: 17 },
+  mistakeTip:   { fontSize: 12, lineHeight: 17 },
 });

@@ -43,6 +43,8 @@ export default function PokerTable() {
   const TOP_SEAT_Y = CY - RY;           // y of top seat centre within felt
   const SEAT_OVERFLOW = Math.max(0, 85 - TOP_SEAT_Y); // px extending above felt top
 
+  const heroFolded = state.phase === 'showdown' && state.lastHeroAction === 'fold';
+
   const tableW = width - 16;
   const cx = tableW / 2;
   const rx = tableW * 0.40;
@@ -127,18 +129,24 @@ export default function PokerTable() {
             )}
         </View>
 
-        <View style={styles.heroBadge}>
+        <View style={[styles.heroBadge, heroFolded && styles.heroBadgeFolded]}>
           <View style={styles.heroPosRow}>
             <Text style={styles.heroLabel}>YOU</Text>
             {state.phase !== 'idle' && (
-              <View style={[styles.heroPosTag, { backgroundColor: '#C9A84C' }]}>
+              <View style={[styles.heroPosTag, { backgroundColor: heroFolded ? '#E74C3C' : '#C9A84C' }]}>
                 <Text style={styles.heroPosText}>{state.heroPosition}</Text>
               </View>
             )}
           </View>
-          <Text style={styles.heroStack}>{state.heroStack}BB</Text>
-          {state.heroBet > 0 && (
-            <Text style={styles.heroBetText}>Bet: {state.heroBet}BB</Text>
+          {heroFolded ? (
+            <Text style={styles.heroFoldedLabel}>FOLDED</Text>
+          ) : (
+            <>
+              <Text style={styles.heroStack}>{state.heroStack}BB</Text>
+              {state.heroBet > 0 && (
+                <Text style={styles.heroBetText}>Bet: {state.heroBet}BB</Text>
+              )}
+            </>
           )}
         </View>
       </View>
@@ -247,6 +255,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#C9A84C50',
     minWidth: 80,
+  },
+  heroBadgeFolded: {
+    backgroundColor: '#2A1616',
+    borderColor: '#E74C3C50',
+  },
+  heroFoldedLabel: {
+    color: '#E74C3C',
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 1,
+    marginTop: 2,
   },
   heroPosRow: {
     flexDirection: 'row',

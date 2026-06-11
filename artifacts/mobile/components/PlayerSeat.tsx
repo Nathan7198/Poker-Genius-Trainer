@@ -73,8 +73,8 @@ export default function PlayerSeat({ player, showCards }: PlayerSeatProps) {
         </View>
       )}
       {folded && (
-        <View style={[styles.actionBubble, { backgroundColor: '#4A4A4A' }]}>
-          <Text style={styles.actionText}>FOLD</Text>
+        <View style={[styles.actionBubble, styles.foldBubble]}>
+          <Text style={styles.actionText}>FOLDED</Text>
         </View>
       )}
 
@@ -159,6 +159,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
+  },
+  foldBubble: {
+    backgroundColor: '#7B241C',
+    borderWidth: 1,
+    borderColor: '#E74C3C60',
   },
   actionText: {
     color: '#FFF',
