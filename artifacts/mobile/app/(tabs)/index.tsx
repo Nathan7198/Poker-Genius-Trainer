@@ -229,108 +229,102 @@ export default function PlayScreen() {
           </View>
         )}
 
-        {/* Showdown */}
-        {isShowdown && (
-          <View style={styles.centerActions}>
-            {/* Winner banner */}
-            {resultConfig && (
-              <View style={[styles.resultBanner, { backgroundColor: resultConfig.bg, borderColor: resultConfig.color + '50' }]}>
-                <Text style={[styles.resultBannerLabel, { color: resultConfig.color }]}>{resultConfig.label}</Text>
-                <Text style={[styles.resultBannerSub, { color: colors.mutedForeground }]}>{resultConfig.sublabel}</Text>
-              </View>
-            )}
-
-            {/* Board cards at showdown */}
-            {board.length > 0 && (
-              <View style={[styles.sdBoardWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <Text style={[styles.showdownTitle, { color: colors.mutedForeground }]}>BOARD</Text>
-                <View style={styles.sdBoardRow}>
-                  {board.map((c, i) => (
-                    <View key={i} style={[styles.sdBoardCard, { backgroundColor: '#FAFAFA', borderColor: '#DDD' }]}>
-                      <Text style={[styles.sdBoardRank, { color: SUIT_COLORS[c.suit] ?? '#000' }]}>{c.rank}</Text>
-                      <Text style={[styles.sdBoardSuit, { color: SUIT_COLORS[c.suit] ?? '#000' }]}>{SUIT_SYMBOLS[c.suit] ?? c.suit}</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            )}
-
-            {/* Hands — hero always shown; villain shows cards if revealed, else FOLDED badge */}
-            {state.heroCards.length === 2 && (
-              <View style={[styles.showdownCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <Text style={[styles.showdownTitle, { color: colors.mutedForeground }]}>HANDS</Text>
-                <View style={styles.showdownRow}>
-                  {/* Hero */}
-                  <View style={styles.showdownHand}>
-                    <Text style={[styles.showdownPlayer, { color: state.showdownResult === 'hero' ? '#27AE60' : colors.mutedForeground }]}>YOU</Text>
-                    <View style={styles.showdownCards}>
-                      {state.heroCards.map((c, i) => (
-                        <View key={i} style={[styles.sdCard, { backgroundColor: '#FAFAFA', borderColor: '#DDD' }]}>
-                          <Text style={[styles.sdRank, { color: SUIT_COLORS[c.suit] ?? '#000' }]}>{c.rank}</Text>
-                          <Text style={[styles.sdSuit, { color: SUIT_COLORS[c.suit] ?? '#000' }]}>{SUIT_SYMBOLS[c.suit] ?? c.suit}</Text>
-                        </View>
-                      ))}
-                    </View>
-                    {heroHandResult && (
-                      <Text style={[styles.showdownHandName, { color: MADE_HAND_COLORS[heroHandResult.hand] }]}>
-                        {heroHandResult.hand}
-                      </Text>
-                    )}
-                  </View>
-
-                  <Text style={[styles.showdownVs, { color: colors.mutedForeground }]}>vs</Text>
-
-                  {/* Villain */}
-                  <View style={styles.showdownHand}>
-                    <Text style={[styles.showdownPlayer, { color: state.showdownResult === 'villain' ? '#E74C3C' : colors.mutedForeground }]}>
-                      {mainVillainPlayer?.name ?? 'VILLAIN'}
-                    </Text>
-                    {villainFaceUpCards.length === 2 ? (
-                      <>
-                        <View style={styles.showdownCards}>
-                          {villainFaceUpCards.map((c, i) => (
-                            <View key={i} style={[styles.sdCard, { backgroundColor: '#FAFAFA', borderColor: '#DDD' }]}>
-                              <Text style={[styles.sdRank, { color: SUIT_COLORS[c.suit] ?? '#000' }]}>{c.rank}</Text>
-                              <Text style={[styles.sdSuit, { color: SUIT_COLORS[c.suit] ?? '#000' }]}>{SUIT_SYMBOLS[c.suit] ?? c.suit}</Text>
-                            </View>
-                          ))}
-                        </View>
-                        {villainHandResult && (
-                          <Text style={[styles.showdownHandName, { color: MADE_HAND_COLORS[villainHandResult.hand] }]}>
-                            {villainHandResult.hand}
-                          </Text>
-                        )}
-                      </>
-                    ) : (
-                      <View style={[styles.foldedBadge, { backgroundColor: '#E74C3C15', borderColor: '#E74C3C50' }]}>
-                        <Text style={[styles.foldedText, { color: '#E74C3C' }]}>FOLDED</Text>
-                      </View>
-                    )}
-                  </View>
-                </View>
-              </View>
-            )}
-
-            {/* Streets played */}
-            {state.postFlopStreetsDone.length > 0 && (
-              <View style={[styles.resultCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <Text style={[styles.resultCardTitle, { color: colors.mutedForeground }]}>STREETS PLAYED</Text>
-                <View style={styles.streetsRow}>
-                  {(['flop','turn','river'] as const).map(s => {
-                    const done = state.postFlopStreetsDone.includes(s);
-                    return (
-                      <View key={s} style={[styles.streetPip, { backgroundColor: done ? colors.gold + '30' : colors.secondary, borderColor: done ? colors.gold : colors.border }]}>
-                        <Text style={[styles.streetPipText, { color: done ? colors.gold : colors.mutedForeground }]}>{s.toUpperCase()}</Text>
-                      </View>
-                    );
-                  })}
-                </View>
-              </View>
-            )}
-
-          </View>
-        )}
       </ScrollView>
+
+      {/* Showdown — own flex:1 container outside ScrollView, no scrolling needed */}
+      {isShowdown && (
+        <View style={styles.showdownContainer}>
+          {/* Winner banner */}
+          {resultConfig && (
+            <View style={[styles.resultBanner, { backgroundColor: resultConfig.bg, borderColor: resultConfig.color + '50' }]}>
+              <Text style={[styles.resultBannerLabel, { color: resultConfig.color }]}>{resultConfig.label}</Text>
+              <Text style={[styles.resultBannerSub, { color: colors.mutedForeground }]}>{resultConfig.sublabel}</Text>
+            </View>
+          )}
+
+          {/* Board cards */}
+          {board.length > 0 && (
+            <View style={[styles.sdBoardWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Text style={[styles.showdownTitle, { color: colors.mutedForeground }]}>BOARD</Text>
+              <View style={styles.sdBoardRow}>
+                {board.map((c, i) => (
+                  <View key={i} style={[styles.sdBoardCard, { backgroundColor: '#FAFAFA', borderColor: '#DDD' }]}>
+                    <Text style={[styles.sdBoardRank, { color: SUIT_COLORS[c.suit] ?? '#000' }]}>{c.rank}</Text>
+                    <Text style={[styles.sdBoardSuit, { color: SUIT_COLORS[c.suit] ?? '#000' }]}>{SUIT_SYMBOLS[c.suit] ?? c.suit}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {/* Hands */}
+          {state.heroCards.length === 2 && (
+            <View style={[styles.showdownCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Text style={[styles.showdownTitle, { color: colors.mutedForeground }]}>HANDS</Text>
+              <View style={styles.showdownRow}>
+                <View style={styles.showdownHand}>
+                  <Text style={[styles.showdownPlayer, { color: state.showdownResult === 'hero' ? '#27AE60' : colors.mutedForeground }]}>YOU</Text>
+                  <View style={styles.showdownCards}>
+                    {state.heroCards.map((c, i) => (
+                      <View key={i} style={[styles.sdCard, { backgroundColor: '#FAFAFA', borderColor: '#DDD' }]}>
+                        <Text style={[styles.sdRank, { color: SUIT_COLORS[c.suit] ?? '#000' }]}>{c.rank}</Text>
+                        <Text style={[styles.sdSuit, { color: SUIT_COLORS[c.suit] ?? '#000' }]}>{SUIT_SYMBOLS[c.suit] ?? c.suit}</Text>
+                      </View>
+                    ))}
+                  </View>
+                  {heroHandResult && (
+                    <Text style={[styles.showdownHandName, { color: MADE_HAND_COLORS[heroHandResult.hand] }]}>{heroHandResult.hand}</Text>
+                  )}
+                </View>
+
+                <Text style={[styles.showdownVs, { color: colors.mutedForeground }]}>vs</Text>
+
+                <View style={styles.showdownHand}>
+                  <Text style={[styles.showdownPlayer, { color: state.showdownResult === 'villain' ? '#E74C3C' : colors.mutedForeground }]}>
+                    {mainVillainPlayer?.name ?? 'VILLAIN'}
+                  </Text>
+                  {villainFaceUpCards.length === 2 ? (
+                    <>
+                      <View style={styles.showdownCards}>
+                        {villainFaceUpCards.map((c, i) => (
+                          <View key={i} style={[styles.sdCard, { backgroundColor: '#FAFAFA', borderColor: '#DDD' }]}>
+                            <Text style={[styles.sdRank, { color: SUIT_COLORS[c.suit] ?? '#000' }]}>{c.rank}</Text>
+                            <Text style={[styles.sdSuit, { color: SUIT_COLORS[c.suit] ?? '#000' }]}>{SUIT_SYMBOLS[c.suit] ?? c.suit}</Text>
+                          </View>
+                        ))}
+                      </View>
+                      {villainHandResult && (
+                        <Text style={[styles.showdownHandName, { color: MADE_HAND_COLORS[villainHandResult.hand] }]}>{villainHandResult.hand}</Text>
+                      )}
+                    </>
+                  ) : (
+                    <View style={[styles.foldedBadge, { backgroundColor: '#E74C3C15', borderColor: '#E74C3C50' }]}>
+                      <Text style={[styles.foldedText, { color: '#E74C3C' }]}>FOLDED</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+            </View>
+          )}
+
+          {/* Streets played */}
+          {state.postFlopStreetsDone.length > 0 && (
+            <View style={[styles.resultCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Text style={[styles.resultCardTitle, { color: colors.mutedForeground }]}>STREETS PLAYED</Text>
+              <View style={styles.streetsRow}>
+                {(['flop','turn','river'] as const).map(s => {
+                  const done = state.postFlopStreetsDone.includes(s);
+                  return (
+                    <View key={s} style={[styles.streetPip, { backgroundColor: done ? colors.gold + '30' : colors.secondary, borderColor: done ? colors.gold : colors.border }]}>
+                      <Text style={[styles.streetPipText, { color: done ? colors.gold : colors.mutedForeground }]}>{s.toUpperCase()}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+          )}
+        </View>
+      )}
 
       {/* NEXT HAND — inline sibling of ScrollView, always visible at showdown */}
       {isShowdown && (
@@ -380,6 +374,7 @@ const styles = StyleSheet.create({
   actionBanner: { marginHorizontal: 12, marginTop: 4, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 7 },
   actionBannerText: { fontSize: 12, fontWeight: '600', textAlign: 'center' },
   centerActions: { alignItems: 'center', paddingHorizontal: 16, paddingTop: 14, gap: 12 },
+  showdownContainer: { flex: 1, paddingHorizontal: 16, paddingTop: 14, gap: 12 },
   dealBtn: { paddingVertical: 16, paddingHorizontal: 48, borderRadius: 14, alignItems: 'center' },
   dealBtnText: { fontSize: 18, fontWeight: '900', letterSpacing: 2 },
   idleSubtext: { fontSize: 11, textAlign: 'center', fontStyle: 'italic' },
@@ -438,7 +433,7 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   nextHandFixed: {
-    paddingVertical: 16, borderRadius: 14, alignItems: 'center',
+    width: '100%', paddingVertical: 16, borderRadius: 14, alignItems: 'center',
     shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3, shadowRadius: 6, elevation: 8,
   },
