@@ -495,10 +495,13 @@ function gameReducer(state: GameState, action: GameAction): GameState {
             villainPlayer.cards, visibleBoard,
           );
 
+      // Add villain's opening bet to pot immediately so the display updates at once
+      const flopPot = newPot + (villain?.betBB ?? 0);
+
       return {
         ...state,
         players: state.players.map(p => ({ ...p, action: null })),
-        phase: 'flop', heroBet, pot: newPot,
+        phase: 'flop', heroBet, pot: flopPot,
         communityCards: flopCards, analysis, postFlopAnalysis: null,
         showAnalysis: true, lastHeroAction: heroAction,
         heroIsAggressor, villainPostFlopAction: villain, heroActsFirst,
@@ -570,7 +573,8 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         }
         // fold: villain adds nothing beyond hero's bet
       } else if (heroAction === 'call') {
-        newPot += callBB * 2;
+        // Villain's bet is already in state.pot — only add hero's matching call
+        newPot += callBB;
       } else if (heroAction === 'check') {
         if (villainFinalResponse.betBB > 0) newPot += villainFinalResponse.betBB;
       }
@@ -620,16 +624,13 @@ function gameReducer(state: GameState, action: GameAction): GameState {
     }
 
     case 'FOLD_TO_VILLAIN_BET': {
-      // Hero folds after seeing villain bet in the analysis modal
-      const vBet = state.postFlopAnalysis?.villainBetBB ?? 0;
+      // Villain's bet is already in state.pot — hero just folds, pot stays as-is
       return {
         ...state,
         phase: 'showdown',
         showAnalysis: false,
         showdownResult: 'villain',
         villainFolded: false,
-        pot: state.pot + vBet, // villain's uncalled bet stays in pot (simplified)
-        postFlopStreetsDone: state.postFlopStreetsDone,
       };
     }
 
@@ -651,6 +652,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           ...state, players: clearedPlayers, phase: 'turn',
           communityCards: turnCards, postFlopAnalysis: null,
           showAnalysis: false, villainPostFlopAction: villain,
+          pot: state.pot + (villain?.betBB ?? 0),
         };
       }
 
@@ -667,6 +669,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           ...state, players: clearedPlayers, phase: 'river',
           communityCards: riverCards, postFlopAnalysis: null,
           showAnalysis: false, villainPostFlopAction: villain,
+          pot: state.pot + (villain?.betBB ?? 0),
         };
       }
 
