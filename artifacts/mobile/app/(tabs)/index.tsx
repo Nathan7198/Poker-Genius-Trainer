@@ -319,19 +319,21 @@ export default function PlayScreen() {
         )}
       </ScrollView>
 
+      {/* NEXT HAND — inline sibling of ScrollView, always visible at showdown */}
+      {isShowdown && (
+        <View style={styles.nextHandBar}>
+          <TouchableOpacity
+            style={[styles.nextHandFixed, { backgroundColor: colors.gold }]}
+            onPress={handleNewHand}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.nextHandFixedText}>NEXT HAND →</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       <ActionPanel />
       <CoachModal />
-
-      {/* Fixed NEXT HAND bar — always visible above the tab bar */}
-      {isShowdown && (
-        <TouchableOpacity
-          style={[styles.nextHandFixed, { bottom: TAB_BAR_H + insets.bottom + 6, backgroundColor: colors.gold }]}
-          onPress={handleNewHand}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.nextHandFixedText}>NEXT HAND →</Text>
-        </TouchableOpacity>
-      )}
     </View>
   );
 }
@@ -414,9 +416,13 @@ const styles = StyleSheet.create({
   streetPip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 8, borderWidth: 1 },
   streetPipText: { fontSize: 12, fontWeight: '800', letterSpacing: 0.5 },
 
-  // Fixed NEXT HAND bar
+  // NEXT HAND bar (inline sibling of ScrollView)
+  nextHandBar: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 8,
+  },
   nextHandFixed: {
-    position: 'absolute', left: 16, right: 16, zIndex: 20,
     paddingVertical: 16, borderRadius: 14, alignItems: 'center',
     shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3, shadowRadius: 6, elevation: 8,
