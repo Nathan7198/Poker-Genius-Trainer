@@ -127,8 +127,11 @@ export default function PlayScreen() {
   const isLive = !isIdle && !isShowdown && !state.showAnalysis;
   const streetBadge = isLive ? ({ preflop: 'PREFLOP', flop: 'FLOP', turn: 'TURN', river: 'RIVER' } as Record<string,string>)[state.phase] ?? null : null;
 
+  // Tab bar is position:absolute — reserve its height so ActionPanel isn't hidden under it
+  const TAB_BAR_H = Platform.OS === 'web' ? 84 : 60;
+
   return (
-    <View style={[styles.root, { backgroundColor: colors.background, paddingTop: Platform.OS === 'web' ? insets.top + 10 : 0 }]}>
+    <View style={[styles.root, { backgroundColor: colors.background, paddingTop: Platform.OS === 'web' ? insets.top + 10 : 0, paddingBottom: TAB_BAR_H }]}>
       {/* Header */}
       <View style={[styles.topBar, { paddingTop: Platform.OS !== 'web' ? insets.top + 4 : 4, borderBottomColor: colors.border }]}>
         <View>

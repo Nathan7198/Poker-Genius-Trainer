@@ -4,21 +4,26 @@ import { useGame } from '@/context/GameContext';
 import PlayingCard from './PlayingCard';
 import PlayerSeat from './PlayerSeat';
 
-// Seat angles going clockwise from hero at the bottom
-const OPPONENT_ANGLES_DEG = [30, 330, 270, 210, 150]; // bottom-right, right, top, left, bottom-left
+// Angles spread across the UPPER half of the oval — no seats at the bottom
+// 270° = top-center, 195°/345° = sides, 230°/310° = upper corners
+const OPPONENT_ANGLES_DEG = [345, 310, 270, 230, 195];
 
 function degToRad(deg: number) {
   return (deg * Math.PI) / 180;
 }
 
+const TABLE_H = 290;
+
 export default function PokerTable() {
   const { state } = useGame();
   const { width } = useWindowDimensions();
-  const TABLE_H = 280;
-  const cx = width / 2;
-  const cy = TABLE_H / 2;
-  const rx = width * 0.41;
-  const ry = TABLE_H * 0.37;
+
+  // Felt dimensions
+  const tableW = width - 16;
+  const cx = tableW / 2;
+  const cy = TABLE_H / 2;   // 145
+  const rx = tableW * 0.40;
+  const ry = 85; // fixed — keeps top-center seat inside the table
 
   function getSeatPos(angleDeg: number) {
     const r = degToRad(angleDeg);
@@ -29,35 +34,28 @@ export default function PokerTable() {
   }
 
   const activePlayers = state.players.slice(0, 5);
-  const visibleCommunity = state.communityCards.filter(c => c.faceUp);
 
   return (
-    <View style={[styles.outer, { height: TABLE_H + 40 }]}>
+    <View style={[styles.outer, { height: TABLE_H + 48, width: tableW }]}>
       {/* Table felt */}
-      <View style={[styles.felt, { width: width - 16, height: TABLE_H, borderRadius: (TABLE_H / 2) + 10 }]}>
-        {/* Inner felt highlight */}
-        <View style={[styles.feltInner, { width: width - 56, height: TABLE_H - 40, borderRadius: (TABLE_H / 2) }]} />
+      <View style={[styles.felt, { width: tableW, height: TABLE_H, borderRadius: TABLE_H / 2 + 8 }]}>
+        {/* Inner dashed border */}
+        <View style={[styles.feltInner, { width: tableW - 40, height: TABLE_H - 40, borderRadius: TABLE_H / 2 }]} />
 
         {/* Pot display */}
-        <View style={styles.potContainer}>
-          {state.pot > 0 && (
-            <View style={styles.potBadge}>
-              <Text style={styles.potLabel}>POT</Text>
-              <Text style={styles.potAmount}>{state.pot.toFixed(1)} BB</Text>
-            </View>
-          )}
-        </View>
+        {state.pot > 0 && (
+          <View style={styles.potBadge}>
+            <Text style={styles.potLabel}>POT</Text>
+            <Text style={styles.potAmount}>{state.pot.toFixed(1)} BB</Text>
+          </View>
+        )}
 
-        {/* Community cards */}
+        {/* Community cards — center of felt */}
         <View style={styles.communityCards}>
           {state.phase !== 'idle' && state.phase !== 'preflop' ? (
-            <>
-              {state.communityCards.slice(0, 5).map((card, i) => (
-                <View key={i} style={styles.communityCardWrap}>
-                  <PlayingCard card={card} size="md" faceDown={!card.faceUp} />
-                </View>
-              ))}
-            </>
+            state.communityCards.slice(0, 5).map((card, i) => (
+              <PlayingCard key={i} card={card} size="md" faceDown={!card.faceUp} />
+            ))
           ) : state.phase === 'preflop' ? (
             <View style={styles.preflopHint}>
               <Text style={styles.preflopHintText}>PREFLOP</Text>
@@ -65,21 +63,13 @@ export default function PokerTable() {
           ) : null}
         </View>
 
-        {/* Phase indicator */}
-        {state.phase !== 'idle' && (
-          <View style={styles.phaseIndicator}>
-            <Text style={styles.phaseText}>{state.phase.toUpperCase()}</Text>
-          </View>
-        )}
-
-        {/* Bot players */}
+        {/* Bot player seats — absolutely positioned on the oval */}
         {activePlayers.map((player, i) => {
-          const angleDeg = OPPONENT_ANGLES_DEG[i];
-          const pos = getSeatPos(angleDeg);
+          const pos = getSeatPos(OPPONENT_ANGLES_DEG[i]);
           return (
             <View
               key={player.id}
-              style={[styles.seatAbsolute, { left: pos.x - 36, top: pos.y - 50 }]}
+              style={[styles.seatAbsolute, { left: pos.x - 36, top: pos.y - 60 }]}
             >
               <PlayerSeat player={player} showCards={state.phase === 'showdown'} />
             </View>
@@ -87,23 +77,22 @@ export default function PokerTable() {
         })}
       </View>
 
-      {/* Hero seat at the bottom */}
-      <View style={styles.heroSeatRow}>
-        {/* Hero cards */}
+      {/* Hero seat — always below the felt */}
+      <View style={styles.heroRow}>
         <View style={styles.heroCards}>
-          {state.heroCards.map((card, i) => (
-            <View key={i} style={{ marginHorizontal: 3 }}>
-              <PlayingCard card={card} size="lg" />
-            </View>
-          ))}
-          {state.phase === 'idle' && (
-            <View style={styles.heroPlaceholder}>
-              <Text style={styles.heroPlaceholderText}>YOUR HAND</Text>
-            </View>
-          )}
+          {state.heroCards.length > 0
+            ? state.heroCards.map((card, i) => (
+                <View key={i} style={{ marginHorizontal: 3 }}>
+                  <PlayingCard card={card} size="lg" />
+                </View>
+              ))
+            : (
+              <View style={styles.heroPlaceholder}>
+                <Text style={styles.heroPlaceholderText}>YOUR HAND</Text>
+              </View>
+            )}
         </View>
 
-        {/* Hero badge */}
         <View style={styles.heroBadge}>
           <View style={styles.heroPosRow}>
             <Text style={styles.heroLabel}>YOU</Text>
@@ -126,7 +115,8 @@ export default function PokerTable() {
 const styles = StyleSheet.create({
   outer: {
     alignItems: 'center',
-    paddingHorizontal: 8,
+    overflow: 'visible',
+    alignSelf: 'center',
   },
   felt: {
     backgroundColor: '#1B4D2E',
@@ -147,12 +137,9 @@ const styles = StyleSheet.create({
     borderColor: '#235C38',
     borderStyle: 'dashed',
   },
-  potContainer: {
-    position: 'absolute',
-    top: '35%',
-    alignItems: 'center',
-  },
   potBadge: {
+    position: 'absolute',
+    top: '34%',
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -163,25 +150,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#C9A84C40',
   },
-  potLabel: {
-    color: '#C9A84C',
-    fontSize: 9,
-    fontWeight: '700',
-    letterSpacing: 1,
-  },
-  potAmount: {
-    color: '#E5C76B',
-    fontSize: 13,
-    fontWeight: '800',
-  },
+  potLabel: { color: '#C9A84C', fontSize: 9, fontWeight: '700', letterSpacing: 1 },
+  potAmount: { color: '#E5C76B', fontSize: 13, fontWeight: '800' },
   communityCards: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     position: 'absolute',
-    top: '52%',
+    top: '55%',
   },
-  communityCardWrap: {},
   preflopHint: {
     paddingHorizontal: 16,
     paddingVertical: 6,
@@ -195,28 +172,15 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 2,
   },
-  phaseIndicator: {
-    position: 'absolute',
-    top: 8,
-    right: 16,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 4,
-  },
-  phaseText: {
-    color: '#C9A84C',
-    fontSize: 9,
-    fontWeight: '700',
-    letterSpacing: 1,
-  },
   seatAbsolute: {
     position: 'absolute',
   },
-  heroSeatRow: {
+
+  // Hero area
+  heroRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 4,
+    marginTop: 6,
     gap: 12,
   },
   heroCards: {
@@ -253,32 +217,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
   },
-  heroLabel: {
-    color: '#E5C76B',
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 1,
-  },
-  heroPosTag: {
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 3,
-  },
-  heroPosText: {
-    color: '#0D1B0F',
-    fontSize: 8,
-    fontWeight: '800',
-  },
-  heroStack: {
-    color: '#7A9E7A',
-    fontSize: 11,
-    fontWeight: '600',
-    marginTop: 2,
-  },
-  heroBetText: {
-    color: '#C9A84C',
-    fontSize: 10,
-    fontWeight: '600',
-    marginTop: 1,
-  },
+  heroLabel: { color: '#E5C76B', fontSize: 10, fontWeight: '800', letterSpacing: 1 },
+  heroPosTag: { paddingHorizontal: 5, paddingVertical: 1, borderRadius: 3 },
+  heroPosText: { color: '#0D1B0F', fontSize: 8, fontWeight: '800' },
+  heroStack: { color: '#7A9E7A', fontSize: 11, fontWeight: '600', marginTop: 2 },
+  heroBetText: { color: '#C9A84C', fontSize: 10, fontWeight: '600', marginTop: 1 },
 });

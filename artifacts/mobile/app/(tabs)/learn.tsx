@@ -228,7 +228,7 @@ export default function LearnScreen() {
             </View>
 
             <TheoryCard title="Equity vs Pot Odds" color="#27AE60" colors={colors}>
-              If your equity exceeds your pot odds, calling is profitable long-term. If your equity is less than the pot odds, folding saves money. Example: You have 35% equity on a flush draw. Villain bets pot (33% pot odds). 35% equity > 33% required → profitable call.
+              If your equity exceeds your pot odds, calling is profitable long-term. If your equity is less than the pot odds, folding saves money. Example: You have 35% equity on a flush draw. Villain bets pot (33% pot odds). 35% equity {'>'} 33% required → profitable call.
             </TheoryCard>
 
             <TheoryCard title="Range vs Range Thinking" color="#9B59B6" colors={colors}>

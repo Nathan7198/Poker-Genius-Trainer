@@ -75,14 +75,18 @@ export default function RangeGrid({ position, highlightHand, showLegend = true, 
                 },
               ]}
             >
-              {!compact && (
-                <Text style={[styles.cellText, {
-                  fontSize: cellSize * 0.3,
-                  color: cell.inOpen || cell.isHighlighted ? '#FFFFFF99' : '#FFFFFF22',
-                }]}>
-                  {cell.hand.slice(-1) === 's' || cell.hand.slice(-1) === 'o' ? '' : ''}
-                </Text>
-              )}
+              <Text
+                style={[styles.cellText, {
+                  fontSize: Math.max(5, cellSize * 0.32),
+                  color: cell.inOpen || cell.in3bValue || cell.in3bBluff || cell.isHighlighted
+                    ? '#FFFFFFCC'
+                    : '#FFFFFF22',
+                }]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+              >
+                {cell.hand}
+              </Text>
             </View>
           ))}
         </View>
