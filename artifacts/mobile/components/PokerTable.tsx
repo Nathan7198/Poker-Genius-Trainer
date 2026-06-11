@@ -61,7 +61,9 @@ export default function PokerTable() {
   //   seat[0] = first clockwise (e.g. SB when hero is BTN) → lower-left (150°)
   //   seat[4] = last  clockwise (e.g. CO when hero is BTN) → lower-right (30°)
   const heroIdx = POSITIONS.indexOf(state.heroPosition);
+  const isPostFlop = ['flop', 'turn', 'river', 'showdown'].includes(state.phase);
   const activePlayers = [...state.players]
+    .filter(p => !isPostFlop || p.isActive || p.position === state.mainVillainPosition)
     .sort((a, b) => {
       const ai = POSITIONS.indexOf(a.position as (typeof POSITIONS)[number]);
       const bi = POSITIONS.indexOf(b.position as (typeof POSITIONS)[number]);
