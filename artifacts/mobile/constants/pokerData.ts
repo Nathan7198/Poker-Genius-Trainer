@@ -86,7 +86,7 @@ export const DIFFICULTY_DESCRIPTIONS: Record<Difficulty, string> = {
 
 const UTG_SET = new Set([
   'AA','KK','QQ','JJ','TT','99','88','77',
-  'AKs','AQs','AJs','ATs','A9s','A8s','A5s','A4s','A3s','A2s',
+  'AKs','AQs','AJs','ATs','A9s','A8s','A7s','A6s','A5s','A4s','A3s','A2s',
   'KQs','KJs','KTs','K9s',
   'QJs','QTs','Q9s',
   'JTs','J9s','J8s',
@@ -96,7 +96,7 @@ const UTG_SET = new Set([
   'KQo','KJo',
 ]);
 
-const HJ_EXTRA = ['66','55','A7s','A6s','K8s','K7s','Q8s','J7s','T7s','97s','86s','A9o','A8o','KTo','QJo'];
+const HJ_EXTRA = ['66','55','K8s','K7s','Q8s','J7s','T7s','97s','86s','A9o','A8o','KTo','QJo'];
 const HJ_SET = new Set([...UTG_SET, ...HJ_EXTRA]);
 
 const CO_EXTRA = ['44','33','22','K6s','K5s','K4s','K3s','K2s','Q7s','Q6s','J6s','J5s','T6s','T5s','96s','95s','85s','75s','64s','53s','43s','A7o','A6o','Q9o','QTo','JTo'];
@@ -117,19 +117,45 @@ export const GTO_RANGES: Record<Position, Set<string>> = {
   BB: new Set(),
 };
 
+// BB defending range vs a raise (~65% of hands, averaged across raise positions).
+// BB gets discounted pot odds (already has 1BB invested) so defends very wide.
 export const BB_DEFENSE = new Set([
+  // All pairs
   'AA','KK','QQ','JJ','TT','99','88','77','66','55','44','33','22',
+  // All suited aces (A2s–AKs)
   'AKs','AQs','AJs','ATs','A9s','A8s','A7s','A6s','A5s','A4s','A3s','A2s',
-  'KQs','KJs','KTs','K9s','K8s','K7s','K6s','K5s',
-  'QJs','QTs','Q9s','Q8s','Q7s',
-  'JTs','J9s','J8s','J7s',
-  'T9s','T8s','T7s','T6s',
-  '98s','97s','96s','87s','86s','76s','75s','65s','64s','54s','43s',
-  'AKo','AQo','AJo','ATo','A9o','A8o','A7o','A6o',
-  'KQo','KJo','KTo','K9o',
-  'QJo','QTo','Q9o',
-  'JTo','J9o',
-  'T9o','T8o','98o',
+  // All suited kings (K2s–KQs)
+  'KQs','KJs','KTs','K9s','K8s','K7s','K6s','K5s','K4s','K3s','K2s',
+  // All suited queens (Q2s–QJs)
+  'QJs','QTs','Q9s','Q8s','Q7s','Q6s','Q5s','Q4s','Q3s','Q2s',
+  // Suited jacks J4s–JTs
+  'JTs','J9s','J8s','J7s','J6s','J5s','J4s',
+  // Suited tens T4s–T9s
+  'T9s','T8s','T7s','T6s','T5s','T4s',
+  // Suited nines 94s–98s
+  '98s','97s','96s','95s','94s',
+  // Suited eights 84s–87s
+  '87s','86s','85s','84s',
+  // Suited sevens 73s–76s
+  '76s','75s','74s','73s',
+  // Suited sixes 63s–65s
+  '65s','64s','63s',
+  // Suited fives 53s–54s
+  '54s','53s',
+  // Suited fours–threes
+  '43s','42s','32s',
+  // All offsuit aces (A2o–AKo)
+  'AKo','AQo','AJo','ATo','A9o','A8o','A7o','A6o','A5o','A4o','A3o','A2o',
+  // Offsuit kings K7o–KQo
+  'KQo','KJo','KTo','K9o','K8o','K7o',
+  // Offsuit queens Q8o–QJo
+  'QJo','QTo','Q9o','Q8o',
+  // Offsuit jacks J8o–JTo
+  'JTo','J9o','J8o',
+  // Offsuit tens T8o–T9o
+  'T9o','T8o',
+  // Connected offsuit hands
+  '98o','97o','87o','76o',
 ]);
 
 export const THREEBET_VALUE = new Set(['AA','KK','QQ','JJ','TT','AKs','AKo','AQs']);

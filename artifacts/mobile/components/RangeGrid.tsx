@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
-import { Position, GRID_RANKS, getGridCell, GTO_RANGES, THREEBET_VALUE, THREEBET_BLUFF } from '@/constants/pokerData';
+import { Position, GRID_RANKS, getGridCell, GTO_RANGES, BB_DEFENSE, THREEBET_VALUE, THREEBET_BLUFF } from '@/constants/pokerData';
 import { useColors } from '@/hooks/useColors';
 
 interface RangeGridProps {
@@ -15,7 +15,8 @@ export default function RangeGrid({ position, highlightHand, showLegend = true, 
   const { width } = useWindowDimensions();
   const cellSize = compact ? Math.floor((width - 40) / 13) - 1 : Math.floor((width - 32) / 13) - 1;
 
-  const range = GTO_RANGES[position];
+  // BB doesn't open — show its defense range (what it plays vs a raise) instead
+  const range = position === 'BB' ? BB_DEFENSE : GTO_RANGES[position];
 
   const cells = useMemo(() => {
     return GRID_RANKS.map((_, row) =>
@@ -95,7 +96,7 @@ export default function RangeGrid({ position, highlightHand, showLegend = true, 
       {/* Legend */}
       {showLegend && (
         <View style={styles.legend}>
-          <LegendItem color="#1A5E34" label="Open Range" />
+          <LegendItem color="#1A5E34" label={position === 'BB' ? 'Defend Range' : 'Open Range'} />
           <LegendItem color="#8B1A1A" label="3-Bet Value" />
           <LegendItem color="#4A1A6B" label="3-Bet Bluff" />
           <LegendItem color="#111E13" label="Fold" />
@@ -105,7 +106,8 @@ export default function RangeGrid({ position, highlightHand, showLegend = true, 
 
       <View style={[styles.statsRow, { borderTopColor: colors.border }]}>
         <Text style={[styles.statsText, { color: colors.mutedForeground }]}>
-          Opening Range: <Text style={{ color: colors.primary, fontWeight: '700' }}>{openPct}%</Text> of hands
+          {position === 'BB' ? 'Defense Range' : 'Opening Range'}:{' '}
+          <Text style={{ color: colors.primary, fontWeight: '700' }}>{openPct}%</Text> of hands
           {' · '}{openCount} combos
         </Text>
       </View>
