@@ -382,7 +382,8 @@ function simulateBotPreflop(players: BotPlayer[], heroPosition: Position): {
       bet = facingRaise ? raiseAmount * 3 : 3;
       facingRaise = true; raiseAmount = bet; raisedByPosition = p.position;
     } else if (botAction === 'call') {
-      bet = facingRaise ? raiseAmount : 0; calledByCount++;
+      // facingRaise → call the raise; !facingRaise → open-limp for 1BB
+      bet = facingRaise ? raiseAmount : 1; calledByCount++;
     }
     pot += bet;
     return { ...p, action: botAction, currentBet: bet, isActive: botAction !== 'fold' };

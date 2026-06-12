@@ -231,8 +231,9 @@ export default function PlayScreen() {
 
           const chipLabel = (act: string | null, bet: number) =>
             act === 'raise' ? `RAISED ${bet}BB` :
+            act === 'call' && bet === 1 ? 'LIMPED' :
             act === 'call'  ? `CALLED ${bet}BB` :
-            act === 'limp'  ? 'LIMPED' : 'FOLDED';
+            'FOLDED';
 
           return (
             <ScrollView
