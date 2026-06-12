@@ -173,7 +173,7 @@ const styles = StyleSheet.create({
   betBadge: {
     position: 'absolute',
     bottom: -10,
-    backgroundColor: '#C9A84C',
+    backgroundColor: '#A8882A',
     paddingHorizontal: 4,
     paddingVertical: 1,
     borderRadius: 4,
@@ -194,7 +194,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
-    borderColor: '#C9A84C',
+    borderColor: '#A8882A',
   },
   dealerText: {
     fontSize: 8,

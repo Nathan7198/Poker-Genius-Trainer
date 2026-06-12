@@ -124,7 +124,7 @@ export default function ActionPanel() {
               {RAISE_PRESETS.map(bb => (
                 <TouchableOpacity
                   key={bb}
-                  style={[styles.preset, { backgroundColor: selectedRaise === bb ? colors.primary : '#1B3A1E', borderColor: selectedRaise === bb ? colors.primary : '#2D5030' }]}
+                  style={[styles.preset, { backgroundColor: selectedRaise === bb ? colors.primary : '#1A1A1A', borderColor: selectedRaise === bb ? colors.primary : '#282828' }]}
                   onPress={() => setSelectedRaise(bb)}
                 >
                   <Text style={[styles.presetText, { color: selectedRaise === bb ? colors.primaryForeground : colors.foreground }]}>
@@ -219,8 +219,8 @@ export default function ActionPanel() {
           </Text>
         </View>
       ) : facingVillainBet && villainPostFlopAction ? (
-        <View style={[styles.contextBanner, { backgroundColor: '#8A6D2815', borderColor: '#8A6D2840', borderWidth: 1 }]}>
-          <Text style={[styles.contextText, { color: '#E5C76B' }]}>
+        <View style={[styles.contextBanner, { backgroundColor: '#60501815', borderColor: '#60501840', borderWidth: 1 }]}>
+          <Text style={[styles.contextText, { color: '#C8A840' }]}>
             {heroCheckedStreet
               ? `You checked · Villain bet ${villainPostFlopAction.betPct}% pot (${villainPostFlopAction.betBB}BB)`
               : `Villain bets ${villainPostFlopAction.betPct}% pot (${villainPostFlopAction.betBB}BB)`}
@@ -247,7 +247,7 @@ export default function ActionPanel() {
               return (
                 <TouchableOpacity
                   key={pct}
-                  style={[styles.preset, { backgroundColor: selectedBetPct === pct ? '#8A6D28' : '#1B3A1E', borderColor: selectedBetPct === pct ? '#C9A84C' : '#2D5030' }]}
+                  style={[styles.preset, { backgroundColor: selectedBetPct === pct ? '#3D2E08' : '#1A1A1A', borderColor: selectedBetPct === pct ? '#A8882A' : '#282828' }]}
                   onPress={() => setSelectedBetPct(pct)}
                 >
                   <Text style={[styles.presetText, { color: selectedBetPct === pct ? '#FFF' : colors.foreground }]}>
@@ -261,7 +261,7 @@ export default function ActionPanel() {
             })}
           </View>
           <TouchableOpacity
-            style={[styles.confirmBtn, { backgroundColor: '#8A6D28' }]}
+            style={[styles.confirmBtn, { backgroundColor: '#3D2E08' }]}
             onPress={() => handlePostFlop('bet', selectedBetPct)}
           >
             <Text style={[styles.confirmBtnText, { color: '#FFF' }]}>
@@ -399,7 +399,7 @@ const styles = StyleSheet.create({
   buttons: { flexDirection: 'row', gap: 8, paddingHorizontal: 12, paddingTop: 4 },
   btn: { paddingVertical: 14, paddingHorizontal: 12, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   btnText: { color: '#FFF', fontWeight: '800', fontSize: 13, letterSpacing: 0.5 },
-  foldBtn: { backgroundColor: '#7F3F3F', flex: 0.8 },
-  callBtn: { backgroundColor: '#1B5EA6' },
-  raiseBtn: { backgroundColor: '#8A6D28', flex: 0.9 },
+  foldBtn: { backgroundColor: '#4A2020', flex: 0.8 },
+  callBtn: { backgroundColor: '#102840' },
+  raiseBtn: { backgroundColor: '#2A1E08', flex: 0.9 },
 });

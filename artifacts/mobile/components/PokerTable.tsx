@@ -136,7 +136,7 @@ export default function PokerTable() {
           <View style={styles.heroPosRow}>
             <Text style={styles.heroLabel}>YOU</Text>
             {state.phase !== 'idle' && (
-              <View style={[styles.heroPosTag, { backgroundColor: heroFolded ? '#E74C3C' : '#C9A84C' }]}>
+              <View style={[styles.heroPosTag, { backgroundColor: heroFolded ? '#E74C3C' : '#A8882A' }]}>
                 <Text style={styles.heroPosText}>{state.heroPosition}</Text>
               </View>
             )}
@@ -164,9 +164,9 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   felt: {
-    backgroundColor: '#1B4D2E',
+    backgroundColor: '#163224',
     borderWidth: 8,
-    borderColor: '#0F3320',
+    borderColor: '#0A1E14',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
@@ -179,7 +179,7 @@ const styles = StyleSheet.create({
   feltInner: {
     position: 'absolute',
     borderWidth: 2,
-    borderColor: '#235C38',
+    borderColor: '#1E4A32',
     borderStyle: 'dashed',
   },
   potBadge: {
@@ -194,10 +194,10 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     gap: 6,
     borderWidth: 1,
-    borderColor: '#C9A84C40',
+    borderColor: '#A8882A40',
   },
-  potLabel: { color: '#C9A84C', fontSize: 9, fontWeight: '700', letterSpacing: 1 },
-  potAmount: { color: '#E5C76B', fontSize: 13, fontWeight: '800' },
+  potLabel: { color: '#A8882A', fontSize: 9, fontWeight: '700', letterSpacing: 1 },
+  potAmount: { color: '#C8A840', fontSize: 13, fontWeight: '800' },
   communityCards: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -211,10 +211,10 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#C9A84C40',
+    borderColor: '#A8882A40',
   },
   preflopHintText: {
-    color: '#C9A84C60',
+    color: '#A8882A60',
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 2,
@@ -239,24 +239,24 @@ const styles = StyleSheet.create({
     height: 74,
     borderRadius: 8,
     borderWidth: 2,
-    borderColor: '#C9A84C40',
+    borderColor: '#A8882A40',
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
   },
   heroPlaceholderText: {
-    color: '#C9A84C40',
+    color: '#A8882A40',
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 2,
   },
   heroBadge: {
-    backgroundColor: '#162A18',
+    backgroundColor: '#111111',
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderWidth: 1,
-    borderColor: '#C9A84C50',
+    borderColor: '#A8882A50',
     minWidth: 80,
   },
   heroBadgeFolded: {
@@ -275,9 +275,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
   },
-  heroLabel: { color: '#E5C76B', fontSize: 10, fontWeight: '800', letterSpacing: 1 },
+  heroLabel: { color: '#C8A840', fontSize: 10, fontWeight: '800', letterSpacing: 1 },
   heroPosTag: { paddingHorizontal: 5, paddingVertical: 1, borderRadius: 3 },
-  heroPosText: { color: '#0D1B0F', fontSize: 8, fontWeight: '800' },
-  heroStack: { color: '#7A9E7A', fontSize: 11, fontWeight: '600', marginTop: 2 },
-  heroBetText: { color: '#C9A84C', fontSize: 10, fontWeight: '600', marginTop: 1 },
+  heroPosText: { color: '#0A0A0A', fontSize: 8, fontWeight: '800' },
+  heroStack: { color: '#5A6A5A', fontSize: 11, fontWeight: '600', marginTop: 2 },
+  heroBetText: { color: '#A8882A', fontSize: 10, fontWeight: '600', marginTop: 1 },
 });

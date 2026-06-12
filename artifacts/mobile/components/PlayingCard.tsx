@@ -23,8 +23,8 @@ export default function PlayingCard({ card, size = 'md', faceDown }: PlayingCard
     return (
       <View style={[styles.card, {
         width: dims.width, height: dims.height, borderRadius: dims.radius,
-        backgroundColor: '#1A5E34',
-        borderColor: '#C9A84C', borderWidth: 1.5,
+        backgroundColor: '#163224',
+        borderColor: '#A8882A', borderWidth: 1.5,
       }]}>
         <View style={styles.backPattern}>
           {[...Array(3)].map((_, i) => (
@@ -95,7 +95,7 @@ const styles = StyleSheet.create({
   },
   backLine: {
     height: 2,
-    backgroundColor: '#C9A84C',
+    backgroundColor: '#A8882A',
     borderRadius: 1,
   },
 });
