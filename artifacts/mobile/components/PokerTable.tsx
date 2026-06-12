@@ -57,20 +57,21 @@ export default function PokerTable() {
     };
   }
 
-  // Sort opponents clockwise from heroPosition:
-  //   seat[0] = first clockwise (e.g. SB when hero is BTN) → lower-left (150°)
-  //   seat[4] = last  clockwise (e.g. CO when hero is BTN) → lower-right (30°)
+  // Map each opponent to a fixed seat slot by their clockwise rank from hero:
+  //   rank 1 (first clockwise) → seat[0] = 150° lower-left
+  //   rank 5 (last  clockwise) → seat[4] = 30°  lower-right
+  // Using rank (not array index) ensures partial tables place players in the
+  // correct physical seat (e.g. SB = rank 5 from BB → always lower-right).
   const heroIdx = POSITIONS.indexOf(state.heroPosition);
   const isPostFlop = ['flop', 'turn', 'river', 'showdown'].includes(state.phase);
-  const activePlayers = [...state.players]
+  const playerSeats = state.players
     .filter(p => !isPostFlop || p.isActive || p.position === state.mainVillainPosition)
-    .sort((a, b) => {
-      const ai = POSITIONS.indexOf(a.position as (typeof POSITIONS)[number]);
-      const bi = POSITIONS.indexOf(b.position as (typeof POSITIONS)[number]);
-      return ((ai - heroIdx + POSITIONS.length) % POSITIONS.length) -
-             ((bi - heroIdx + POSITIONS.length) % POSITIONS.length);
+    .map(p => {
+      const pi = POSITIONS.indexOf(p.position as (typeof POSITIONS)[number]);
+      const rank = (pi - heroIdx + POSITIONS.length) % POSITIONS.length; // 1..5
+      return { player: p, seatIdx: rank - 1 }; // seatIdx 0..4
     })
-    .slice(0, 5);
+    .filter(s => s.seatIdx >= 0 && s.seatIdx < 5);
 
   return (
     <View style={[styles.outer, { height: TABLE_H + SEAT_OVERFLOW + 90, paddingTop: SEAT_OVERFLOW, width: tableW }]}>
@@ -80,9 +81,9 @@ export default function PokerTable() {
         <View style={[styles.feltInner, { width: tableW - 40, height: TABLE_H - 40, borderRadius: TABLE_H / 2 }]} />
 
         {/* Bot player seats — absolutely positioned on the oval */}
-        {activePlayers.map((player, i) => {
-          const pos = getSeatPos(OPPONENT_ANGLES_DEG[i]);
-          const topOffset = getSeatTopOffset(OPPONENT_ANGLES_DEG[i]);
+        {playerSeats.map(({ player, seatIdx }) => {
+          const pos = getSeatPos(OPPONENT_ANGLES_DEG[seatIdx]);
+          const topOffset = getSeatTopOffset(OPPONENT_ANGLES_DEG[seatIdx]);
           return (
             <View
               key={player.id}
