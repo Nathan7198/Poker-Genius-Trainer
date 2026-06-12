@@ -7,15 +7,16 @@ const RED_SUITS = new Set(['h','d']);
 
 interface PlayingCardProps {
   card?: Card;
-  size?: 'sm'|'md'|'lg';
+  size?: 'sm'|'board'|'md'|'lg';
   faceDown?: boolean;
 }
 
 export default function PlayingCard({ card, size = 'md', faceDown }: PlayingCardProps) {
   const dims = {
-    sm: { width:28, height:38, rankSize:9,  suitSize:8,  radius:4, pad:2 },
-    md: { width:38, height:52, rankSize:12, suitSize:10, radius:6, pad:3 },
-    lg: { width:54, height:74, rankSize:16, suitSize:14, radius:8, pad:4 },
+    sm:    { width:28, height:38, rankSize:9,  suitSize:8,  radius:4, pad:2 },
+    board: { width:34, height:46, rankSize:11, suitSize:9,  radius:5, pad:2 },
+    md:    { width:38, height:52, rankSize:12, suitSize:10, radius:6, pad:3 },
+    lg:    { width:54, height:74, rankSize:16, suitSize:14, radius:8, pad:4 },
   }[size];
 
   if (faceDown || !card?.faceUp) {

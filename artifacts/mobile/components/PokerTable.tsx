@@ -105,7 +105,7 @@ export default function PokerTable() {
         <View style={styles.communityCards}>
           {state.phase !== 'idle' && state.phase !== 'preflop' ? (
             state.communityCards.slice(0, 5).map((card, i) => (
-              <PlayingCard key={i} card={card} size="sm" faceDown={!card.faceUp} />
+              <PlayingCard key={i} card={card} size="board" faceDown={!card.faceUp} />
             ))
           ) : state.phase === 'preflop' ? (
             <View style={styles.preflopHint}>
