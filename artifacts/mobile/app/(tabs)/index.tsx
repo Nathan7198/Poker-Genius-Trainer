@@ -215,15 +215,48 @@ export default function PlayScreen() {
         {/* Table — visible during play AND at showdown (villain cards auto-revealed in seat) */}
         {!isIdle && <PokerTable />}
 
-        {/* Preflop raise context banner */}
-        {state.phase === 'preflop' && state.actionCtx.facingRaise && !state.showAnalysis && (
-          <View style={[styles.actionBanner, { backgroundColor: '#8A6D2815' }]}>
-            <Text style={[styles.actionBannerText, { color: '#E5C76B' }]}>
-              {state.actionCtx.raisedByPosition} raised to {state.actionCtx.raiseAmount}BB
-              {state.actionCtx.calledByCount > 0 ? ` · ${state.actionCtx.calledByCount} caller(s)` : ''}
-            </Text>
-          </View>
-        )}
+        {/* Preflop action trail — shows each player's action in position order */}
+        {state.phase === 'preflop' && !state.showAnalysis && (() => {
+          const PF_ORDER = ['UTG', 'HJ', 'CO', 'BTN', 'SB', 'BB'] as const;
+          type PFPos = typeof PF_ORDER[number];
+          const heroIdx = PF_ORDER.indexOf(state.heroPosition as PFPos);
+          const preHeroBots = state.players
+            .filter(p => PF_ORDER.indexOf(p.position as PFPos) < heroIdx && p.action !== null)
+            .sort((a, b) => PF_ORDER.indexOf(a.position as PFPos) - PF_ORDER.indexOf(b.position as PFPos));
+          if (preHeroBots.length === 0) return null;
+
+          const chipColor = (act: string | null) =>
+            act === 'raise' ? '#E5C76B' :
+            act === 'call' || act === 'limp' ? '#3498DB' : '#666';
+
+          const chipLabel = (act: string | null, bet: number) =>
+            act === 'raise' ? `RAISED ${bet}BB` :
+            act === 'call'  ? `CALLED ${bet}BB` :
+            act === 'limp'  ? 'LIMPED' : 'FOLDED';
+
+          return (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.actionTrail}
+              contentContainerStyle={styles.actionTrailContent}
+            >
+              {preHeroBots.map(p => {
+                const col = chipColor(p.action);
+                return (
+                  <View key={p.position} style={[styles.actionChip, { borderColor: col + '60', backgroundColor: col + '15' }]}>
+                    <Text style={[styles.chipPos, { color: colors.mutedForeground }]}>{p.position}</Text>
+                    <Text style={[styles.chipAction, { color: col }]}>{chipLabel(p.action, p.currentBet)}</Text>
+                  </View>
+                );
+              })}
+              <View style={[styles.actionChip, { borderColor: '#27AE6060', backgroundColor: '#27AE6015' }]}>
+                <Text style={[styles.chipPos, { color: colors.mutedForeground }]}>YOU</Text>
+                <Text style={[styles.chipAction, { color: '#27AE60' }]}>YOUR TURN</Text>
+              </View>
+            </ScrollView>
+          );
+        })()}
 
         {/* Idle */}
         {isIdle && (
@@ -341,8 +374,11 @@ const styles = StyleSheet.create({
   diffOptionDesc: { fontSize: 11, marginTop: 2, lineHeight: 15 },
   scroll: { flex: 1 },
   scrollContent: { paddingBottom: 8, paddingTop: 8 },
-  actionBanner: { marginHorizontal: 12, marginTop: 4, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 7 },
-  actionBannerText: { fontSize: 12, fontWeight: '600', textAlign: 'center' },
+  actionTrail: { marginHorizontal: 12, marginTop: 6 },
+  actionTrailContent: { flexDirection: 'row', gap: 6, alignItems: 'center', paddingVertical: 2 },
+  actionChip: { borderRadius: 8, borderWidth: 1, paddingHorizontal: 9, paddingVertical: 5, alignItems: 'center', minWidth: 70 },
+  chipPos: { fontSize: 9, fontWeight: '800', letterSpacing: 0.8, marginBottom: 2 },
+  chipAction: { fontSize: 10, fontWeight: '700', letterSpacing: 0.2 },
   centerActions: { alignItems: 'center', paddingHorizontal: 16, paddingTop: 14, gap: 12 },
   dealBtn: { paddingVertical: 16, paddingHorizontal: 48, borderRadius: 14, alignItems: 'center' },
   dealBtnText: { fontSize: 18, fontWeight: '900', letterSpacing: 2 },
