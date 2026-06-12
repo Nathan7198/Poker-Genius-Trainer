@@ -377,16 +377,24 @@ function simulateBotPreflop(players: BotPlayer[], heroPosition: Position): {
     const posIdx = pfOrder.indexOf(p.position);
     if (posIdx < 0 || posIdx >= heroIdx) return p;
     const botAction = simulateBotAction(p.type, p.position, facingRaise, raiseAmount, pot);
-    let bet = 0;
+    // alreadyPosted: blind chips already counted in the starting pot of 1.5
+    const alreadyPosted = p.position === 'SB' ? 0.5 : p.position === 'BB' ? 1 : 0;
+    // totalCommit: raise-to / call-to amount (used for display + section C formula)
+    let totalCommit = 0;
+    // extraChips: actual new chips added to pot (blind-adjusted so no double-count)
+    let extraChips = 0;
     if (botAction === 'raise') {
-      bet = facingRaise ? raiseAmount * 3 : 3;
-      facingRaise = true; raiseAmount = bet; raisedByPosition = p.position;
+      totalCommit = facingRaise ? raiseAmount * 3 : 3;
+      extraChips = totalCommit - alreadyPosted;
+      facingRaise = true; raiseAmount = totalCommit; raisedByPosition = p.position;
     } else if (botAction === 'call') {
       // facingRaise → call the raise; !facingRaise → open-limp for 1BB
-      bet = facingRaise ? raiseAmount : 1; calledByCount++;
+      totalCommit = facingRaise ? raiseAmount : 1;
+      extraChips = Math.max(0, totalCommit - alreadyPosted);
+      calledByCount++;
     }
-    pot += bet;
-    return { ...p, action: botAction, currentBet: bet, isActive: botAction !== 'fold' };
+    pot += extraChips;
+    return { ...p, action: botAction, currentBet: totalCommit, isActive: botAction !== 'fold' };
   });
   return { players: updated, actionCtx: { facingRaise, raiseAmount, potSize: pot, calledByCount, raisedByPosition }, pot };
 }
