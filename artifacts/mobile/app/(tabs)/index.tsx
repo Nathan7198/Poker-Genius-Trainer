@@ -177,8 +177,8 @@ export default function PlayScreen() {
             </View>
           )}
           {isLive && state.pot > 0 && (
-            <View style={[styles.potBadge, { backgroundColor: '#8A6D2820', borderColor: '#8A6D2850' }]}>
-              <Text style={[styles.potText, { color: '#E5C76B' }]}>POT {state.pot.toFixed(1)}BB</Text>
+            <View style={[styles.potBadge, { backgroundColor: '#A8882A20', borderColor: '#A8882A50' }]}>
+              <Text style={[styles.potText, { color: '#C8A840' }]}>POT {state.pot.toFixed(1)}BB</Text>
             </View>
           )}
           <TouchableOpacity
@@ -263,7 +263,7 @@ export default function PlayScreen() {
         {isIdle && (
           <View style={styles.centerActions}>
             <TouchableOpacity style={[styles.dealBtn, { backgroundColor: colors.gold }]} onPress={handleNewHand}>
-              <Text style={[styles.dealBtnText, { color: '#0D1B0F' }]}>DEAL CARDS</Text>
+              <Text style={[styles.dealBtnText, { color: '#0A0A0A' }]}>DEAL CARDS</Text>
             </TouchableOpacity>
             <Text style={[styles.idleSubtext, { color: colors.mutedForeground }]}>
               Hero always at bottom · Boards never repeat · Full street coaching
