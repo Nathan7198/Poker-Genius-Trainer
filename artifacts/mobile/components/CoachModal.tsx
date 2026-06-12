@@ -188,6 +188,14 @@ export default function CoachModal() {
                 {pf.cbetRecommendation.sizingPct > 0 && (
                   <StatCell label="GTO Size" value={`${pf.cbetRecommendation.sizingPct}% pot`} color={gtoColor} colors={colors} />
                 )}
+                {pf.drawInfo.outs > 0 && (
+                  <StatCell
+                    label="Draw Equity"
+                    value={`~${pf.drawInfo.equity}% (${pf.drawInfo.outs} outs)`}
+                    color={pf.drawInfo.drawType === 'combo' ? '#E74C3C' : pf.drawInfo.drawType === 'flush' || pf.drawInfo.drawType === 'oesd' ? '#3498DB' : '#E67E22'}
+                    colors={colors}
+                  />
+                )}
               </View>
 
               {/* C-bet reasoning */}

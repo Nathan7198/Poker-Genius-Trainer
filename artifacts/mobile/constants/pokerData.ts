@@ -331,6 +331,107 @@ export interface CbetRecommendation {
   reason: string;
 }
 
+export type DrawType = 'combo' | 'flush' | 'oesd' | 'gutshot' | 'overcard' | 'none';
+
+export interface DrawInfo {
+  drawType: DrawType;
+  outs: number;
+  equity: number;   // % via rule of 4/2
+  label: string;   // e.g. "Flush Draw (9 outs, ~36%)"
+}
+
+/**
+ * Count draw outs for hero's hole cards + board using rule-of-4/rule-of-2.
+ * Returns the strongest draw found.
+ */
+export function countDrawOuts(
+  holeCards: Card[],
+  board: Card[],
+  street: 'flop' | 'turn' | 'river',
+): DrawInfo {
+  const none: DrawInfo = { drawType: 'none', outs: 0, equity: 0, label: '' };
+  if (board.length < 3 || holeCards.length < 2) return none;
+  const cardsToRiver = street === 'flop' ? 2 : street === 'turn' ? 1 : 0;
+  if (cardsToRiver === 0) return none;
+
+  // ── Flush draw: any suit with exactly 4 cards total, hero has ≥1 ─────────
+  const suitCounts: Record<string, number> = {};
+  const holeSuitCounts: Record<string, number> = {};
+  for (const c of [...holeCards, ...board]) suitCounts[c.suit] = (suitCounts[c.suit] ?? 0) + 1;
+  for (const c of holeCards) holeSuitCounts[c.suit] = (holeSuitCounts[c.suit] ?? 0) + 1;
+  let hasFlushDraw = false;
+  for (const [suit, count] of Object.entries(suitCounts)) {
+    if (count === 4 && (holeSuitCounts[suit] ?? 0) >= 1) { hasFlushDraw = true; break; }
+  }
+
+  // ── Straight draw: work with rank values, ace is both 1 and 14 ───────────
+  const allRankVals: number[] = [];
+  for (const c of [...holeCards, ...board]) {
+    const v = RANK_VALUES[c.rank];
+    allRankVals.push(v);
+    if (v === 14) allRankVals.push(1);
+  }
+  const uniqueRanks = [...new Set(allRankVals)].sort((a, b) => a - b);
+
+  const holeRankSet = new Set<number>();
+  for (const c of holeCards) {
+    const v = RANK_VALUES[c.rank];
+    holeRankSet.add(v);
+    if (v === 14) holeRankSet.add(1);
+  }
+
+  // OESD: 4 strictly consecutive ranks, at least one from hole cards
+  let hasOESD = false;
+  for (let i = 0; i + 3 < uniqueRanks.length; i++) {
+    const w = uniqueRanks.slice(i, i + 4);
+    if (w[3] - w[0] === 3 && w.some(r => holeRankSet.has(r))) { hasOESD = true; break; }
+  }
+
+  // Gutshot: any window of 5 ranks where exactly 4 are present, at least one from hole
+  let hasGutshot = false;
+  if (!hasOESD) {
+    for (let low = 1; low <= 10; low++) {
+      const window = [low, low+1, low+2, low+3, low+4];
+      const hits = window.filter(r => uniqueRanks.includes(r));
+      if (hits.length === 4 && hits.some(r => holeRankSet.has(r))) { hasGutshot = true; break; }
+    }
+  }
+
+  // ── Overcards (no pair or better on board) ────────────────────────────────
+  const boardRankVals = board.map(c => RANK_VALUES[c.rank]);
+  const maxBoardRank = Math.max(...boardRankVals);
+  const holeRankArr = holeCards.map(c => RANK_VALUES[c.rank]);
+  const overcardCount = new Set(holeRankArr.filter(r => r > maxBoardRank)).size;
+
+  // ── Combine draws ─────────────────────────────────────────────────────────
+  const m = cardsToRiver === 2 ? 4 : 2;
+  const eq = (outs: number) => Math.min(outs * m, 90);
+
+  if (hasFlushDraw && hasOESD) {
+    const outs = 15; return { drawType: 'combo', outs, equity: eq(outs), label: `Combo Draw (${outs} outs, ~${eq(outs)}%)` };
+  }
+  if (hasFlushDraw && hasGutshot) {
+    const outs = 12; return { drawType: 'combo', outs, equity: eq(outs), label: `Flush + Gutshot (${outs} outs, ~${eq(outs)}%)` };
+  }
+  if (hasFlushDraw) {
+    const outs = 9; return { drawType: 'flush', outs, equity: eq(outs), label: `Flush Draw (${outs} outs, ~${eq(outs)}%)` };
+  }
+  if (hasOESD) {
+    const outs = 8; return { drawType: 'oesd', outs, equity: eq(outs), label: `Straight Draw (${outs} outs, ~${eq(outs)}%)` };
+  }
+  if (hasGutshot) {
+    const outs = 4; return { drawType: 'gutshot', outs, equity: eq(outs), label: `Gutshot (${outs} outs, ~${eq(outs)}%)` };
+  }
+  if (overcardCount >= 2) {
+    const outs = 6; return { drawType: 'overcard', outs, equity: eq(outs), label: `Two Overcards (${outs} outs, ~${eq(outs)}%)` };
+  }
+  if (overcardCount === 1) {
+    const outs = 3; return { drawType: 'overcard', outs, equity: eq(outs), label: `Overcard (${outs} outs, ~${eq(outs)}%)` };
+  }
+
+  return none;
+}
+
 export interface BoardTextureResult {
   texture: BoardTexture;
   label: string;
@@ -419,34 +520,47 @@ export function getCbetRecommendation(
   madeHandRank: number,
   isAggressor: boolean,
   facingVillainBet: boolean,
+  drawInfo?: DrawInfo,
 ): CbetRecommendation {
+  const hasStrongDraw = drawInfo &&
+    (drawInfo.drawType === 'combo' || drawInfo.drawType === 'flush' || drawInfo.drawType === 'oesd');
+
   if (facingVillainBet) {
     if (madeHandRank >= 5) return { action: 'bet', sizingPct: 0, reason: 'Very strong hand facing a bet — raise to build the pot.' };
     if (madeHandRank >= 3) return { action: 'bet', sizingPct: 0, reason: 'Strong made hand — call or raise depending on sizing.' };
     if (madeHandRank === 2) return { action: 'bet', sizingPct: 0, reason: 'One pair: call if pot odds justify, fold to oversized bets.' };
+    if (hasStrongDraw) return { action: 'bet', sizingPct: 0, reason: `Call with your ${drawInfo!.label} — you have ~${drawInfo!.equity}% equity. If pot odds are satisfied, calling is +EV. Strong draws can also raise as semi-bluffs.` };
     return { action: 'check', sizingPct: 0, reason: 'Weak holding facing aggression — fold unless you have a strong draw.' };
   }
+
   if (!isAggressor) {
     if (madeHandRank >= 4) return { action: 'bet', sizingPct: 50, reason: 'Donk-bet strong value hands for protection and to build the pot.' };
+    if (hasStrongDraw) return { action: 'bet', sizingPct: 50, reason: `Semi-bluff donk-bet with your ${drawInfo!.label} (~${drawInfo!.equity}% equity) — you can win the pot now or improve to the best hand.` };
     return { action: 'check', sizingPct: 0, reason: 'Check to the PF aggressor — they have the range advantage and will often c-bet.' };
   }
+
   switch (texture) {
     case 'dry':
+      if (hasStrongDraw) return { action: 'bet', sizingPct: 50, reason: `Semi-bluff c-bet with your ${drawInfo!.label} (~${drawInfo!.equity}% equity) — on a dry board your fold equity stacks on top of strong draw equity.` };
       return { action: 'bet', sizingPct: 33, reason: 'Dry board is perfect for a small, high-frequency c-bet. You have a range advantage and opponents fold a lot.' };
     case 'semiWet':
       if (madeHandRank >= 3) return { action: 'bet', sizingPct: 60, reason: 'Two pair+ on semi-wet board: size up to deny draw equity.' };
       if (madeHandRank === 2) return { action: 'bet', sizingPct: 50, reason: 'One pair: medium c-bet for value + protection vs draws.' };
+      if (hasStrongDraw) return { action: 'bet', sizingPct: 55, reason: `Semi-bluff c-bet with your ${drawInfo!.label} (~${drawInfo!.equity}% equity) — size up slightly to deny opponent's counter-draws.` };
       return { action: 'check', sizingPct: 0, reason: 'Semi-wet miss: check to balance your range and avoid getting raised off your hand.' };
     case 'wet':
       if (madeHandRank >= 4) return { action: 'bet', sizingPct: 75, reason: 'Very strong hand on a wet board — size up to charge all the draws.' };
       if (madeHandRank === 3) return { action: 'bet', sizingPct: 66, reason: 'Trips on wet board: charge the flush and straight draws.' };
+      if (hasStrongDraw) return { action: 'bet', sizingPct: 60, reason: `Semi-bluff c-bet with your ${drawInfo!.label} (~${drawInfo!.equity}% equity) — your draw equity is real here; bet to put pressure on weaker made hands.` };
       return { action: 'check', sizingPct: 0, reason: 'Wet board miss: checking is better — bluffs are easy to raise here.' };
     case 'monotone':
       if (madeHandRank >= 6) return { action: 'bet', sizingPct: 50, reason: 'You have the flush — bet for value on a monotone board.' };
+      if (hasStrongDraw && drawInfo!.drawType === 'flush') return { action: 'bet', sizingPct: 50, reason: `Bet your ${drawInfo!.label} (~${drawInfo!.equity}% equity) — on a monotone board you have the same suit represented.` };
       return { action: 'check', sizingPct: 0, reason: 'Check monotone without a flush. Villain can always represent a flush against your bets.' };
     case 'paired':
       if (madeHandRank >= 4) return { action: 'bet', sizingPct: 50, reason: 'Trips or better on paired board — solid value bet.' };
       if (madeHandRank >= 2) return { action: 'bet', sizingPct: 33, reason: 'Small bet on paired board exploits your range advantage as the PF raiser.' };
+      if (hasStrongDraw) return { action: 'bet', sizingPct: 40, reason: `Semi-bluff c-bet with your ${drawInfo!.label} (~${drawInfo!.equity}% equity) — your draw equity is independent of the paired board.` };
       return { action: 'check', sizingPct: 0, reason: 'Check misses on paired boards — hard to credibly represent a big hand.' };
   }
 }

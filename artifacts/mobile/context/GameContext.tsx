@@ -6,9 +6,9 @@ import {
   createDeck, shuffleDeck, getHandNotation, getEquity, calcPotOdds,
   getHandStrength, GTO_RANGES, BB_DEFENSE, simulateBotAction,
   THREEBET_VALUE, RANK_VALUES,
-  BoardTextureResult, MadeHand, CbetRecommendation,
+  BoardTextureResult, MadeHand, CbetRecommendation, DrawInfo,
   analyzeBoardTexture, evaluateMadeHand, getCbetRecommendation,
-  simulateVillainPostFlop, evaluateHandWinner,
+  simulateVillainPostFlop, evaluateHandWinner, countDrawOuts,
 } from '@/constants/pokerData';
 
 export type GamePhase = 'idle'|'preflop'|'flop'|'turn'|'river'|'showdown';
@@ -59,6 +59,7 @@ export interface PostFlopStreetAnalysis {
   boardTexture: BoardTextureResult;
   madeHand: MadeHand;
   madeHandRank: number;
+  drawInfo: DrawInfo;
   heroAction: PostFlopHeroAction;
   betPct: number;
   betBB: number;
@@ -293,25 +294,49 @@ function buildPostFlopAnalysis(
   const facingBet = villainOpenAction.action === 'bet' || villainOpenAction.action === 'raise';
   const boardTexture = analyzeBoardTexture(board);
   const { hand: madeHand, rank: madeHandRank } = evaluateMadeHand(heroCards, board);
-  const cbet = getCbetRecommendation(boardTexture.texture, madeHandRank, heroIsAggressor, facingBet);
+
+  // Compute draw outs — only meaningful when hero hasn't already made a strong hand
+  const drawInfo = madeHandRank <= 2
+    ? countDrawOuts(heroCards, board, street)
+    : { drawType: 'none' as const, outs: 0, equity: 0, label: '' };
+
+  const cbet = getCbetRecommendation(boardTexture.texture, madeHandRank, heroIsAggressor, facingBet, drawInfo);
   // potBB already includes villain's bet, so it IS the pot before hero's call
   const potOddsPct = facingBet ? calcPotOdds(villainOpenAction.betBB, potBB) : 0;
   const betBB = Math.round((betPct / 100) * potBB * 10) / 10;
+
+  // Total effective equity = made hand baseline + draw equity
+  // High Card ~15%, One Pair ~50% vs range. Draw equity is additive on top.
+  const madeHandEquity = madeHandRank >= 2 ? 50 : 15;
+  const totalEquity = madeHandRank >= 2 ? madeHandEquity : Math.max(madeHandEquity, drawInfo.equity);
+  const hasStrongDraw = drawInfo.drawType === 'combo' || drawInfo.drawType === 'flush' || drawInfo.drawType === 'oesd';
+  const drawIsProfit = drawInfo.equity >= potOddsPct;
+
   const mistakes: MistakeType[] = [];
 
   if (!facingBet) {
+    // Missed value: had a strong made hand and didn't bet
     if (cbet.action === 'bet' && (heroAction === 'check' || heroAction === 'fold') && madeHandRank >= 3) {
       mistakes.push('missed_value');
     }
+    // Also flag: strong draw that should have semi-bluffed but checked/folded
+    if (cbet.action === 'bet' && (heroAction === 'check' || heroAction === 'fold') && hasStrongDraw && madeHandRank < 3) {
+      mistakes.push('missed_value');
+    }
+    // Bad bluff: no made hand AND no strong draw, betting against unfavourable spot
     const bluffBadBoard = boardTexture.texture === 'wet' || boardTexture.texture === 'monotone';
-    if ((heroAction === 'bet' || heroAction === 'raise') && madeHandRank <= 1 &&
+    if ((heroAction === 'bet' || heroAction === 'raise') && madeHandRank <= 1 && !hasStrongDraw &&
         (villainType === 'Fish' || bluffBadBoard)) {
       mistakes.push('bad_bluff');
     }
   } else {
     const foldTooTightThreshold = villainType === 'Maniac' ? 2 : 3;
-    if (heroAction === 'fold' && madeHandRank >= foldTooTightThreshold) mistakes.push('folded_too_tight');
-    if ((heroAction === 'call' || heroAction === 'raise') && madeHandRank <= 1 && villainOpenAction.betPct >= 66) {
+    // Folded too tight: either had a strong enough made hand OR a profitable draw
+    if (heroAction === 'fold' && (madeHandRank >= foldTooTightThreshold || (hasStrongDraw && drawIsProfit))) {
+      mistakes.push('folded_too_tight');
+    }
+    // Ignored pot odds: called without sufficient equity (draw equity now counted)
+    if ((heroAction === 'call' || heroAction === 'raise') && totalEquity < potOddsPct && madeHandRank <= 1 && !hasStrongDraw) {
       mistakes.push('ignored_pot_odds');
     }
   }
@@ -320,14 +345,18 @@ function buildPostFlopAnalysis(
   let gtoAction: PostFlopHeroAction;
   let gtoSizingPct = cbet.sizingPct;
   if (facingBet) {
-    gtoAction = madeHandRank >= 5 ? 'raise' : madeHandRank >= 3 ? 'call' :
-                (madeHandRank === 2 && potOddsPct < 30) ? 'call' : 'fold';
+    if (madeHandRank >= 5) gtoAction = 'raise';
+    else if (madeHandRank >= 3) gtoAction = 'call';
+    else if (madeHandRank === 2 && potOddsPct < 30) gtoAction = 'call';
+    else if (hasStrongDraw && drawIsProfit) gtoAction = 'call'; // draw equity justifies the call
+    else gtoAction = 'fold';
   } else {
     gtoAction = cbet.action === 'bet' ? 'bet' : 'check';
     gtoSizingPct = cbet.sizingPct;
   }
 
   const streetLabel = street.charAt(0).toUpperCase() + street.slice(1);
+  const drawNote = drawInfo.outs > 0 ? ` You hold a ${drawInfo.label}.` : '';
 
   // Build advice considering villain's response
   const vr = villainResponse;
@@ -340,22 +369,26 @@ function buildPostFlopAnalysis(
 
   let advice = '';
   if (isGTO) {
-    advice = `Good ${streetLabel} decision! ${madeHand} on a ${boardTexture.label} board — ${heroAction} is solid.${villainResponseNote}`;
+    advice = `Good ${streetLabel} decision! ${madeHand} on a ${boardTexture.label} board — ${heroAction} is solid.${drawNote}${villainResponseNote}`;
+  } else if (mistakes.includes('missed_value') && hasStrongDraw) {
+    advice = `You had a ${drawInfo.label} — semi-bluff betting is the right move.${drawNote} ${cbet.reason}${villainResponseNote}`;
   } else if (mistakes.includes('missed_value')) {
     advice = `You have ${madeHand} on a ${boardTexture.label} board — betting for value is more profitable. ${cbet.reason}${villainResponseNote}`;
   } else if (mistakes.includes('bad_bluff')) {
-    advice = `Bluffing on a ${boardTexture.label} board with no made hand is high risk. ${cbet.reason}${villainResponseNote}`;
+    advice = `Bluffing on a ${boardTexture.label} board with no made hand or strong draw is high risk. ${cbet.reason}${villainResponseNote}`;
+  } else if (mistakes.includes('folded_too_tight') && hasStrongDraw) {
+    advice = `Folding with a ${drawInfo.label} facing a ${villainOpenAction.betPct}% pot bet is too tight — you had ~${drawInfo.equity}% equity and pot odds of ${potOddsPct}%. Calling was profitable.${villainResponseNote}`;
   } else if (mistakes.includes('folded_too_tight')) {
     advice = `Folding ${madeHand} to a ${villainOpenAction.betPct}% pot bet is too tight. This hand has enough strength to continue.${villainResponseNote}`;
   } else if (mistakes.includes('ignored_pot_odds')) {
-    advice = `Calling ${villainOpenAction.betPct}% pot with no made hand requires ${potOddsPct}% equity — you likely don't have it.${villainResponseNote}`;
+    advice = `Calling ${villainOpenAction.betPct}% pot with no made hand or strong draw requires ${potOddsPct}% equity — you likely don't have it.${drawNote}${villainResponseNote}`;
   } else {
-    advice = cbet.reason + villainResponseNote;
+    advice = cbet.reason + drawNote + villainResponseNote;
   }
 
   const exploitTip = getExploitTipPostFlop(villainType, heroAction, madeHandRank, facingBet, mistakes);
   return {
-    street, boardTexture, madeHand, madeHandRank, heroAction, betPct, betBB,
+    street, boardTexture, madeHand, madeHandRank, drawInfo, heroAction, betPct, betBB,
     villainAction: villainOpenAction.action,
     villainBetPct: villainOpenAction.betPct,
     villainBetBB: villainOpenAction.betBB,
