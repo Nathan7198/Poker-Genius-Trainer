@@ -946,7 +946,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         // Reveal main villain's cards + evaluate the winner
         const board = state.communityCards.filter(c => c.faceUp);
         const revealedPlayers = state.players.map(p =>
-          p.position === state.mainVillainPosition
+          p.isActive
             ? { ...p, cards: p.cards.map(c => ({ ...c, faceUp: true })) }
             : p
         );
