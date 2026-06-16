@@ -180,11 +180,6 @@ export default function PlayScreen() {
               <Text style={[styles.streetBadgeText, { color: colors.gold }]}>{streetBadge}</Text>
             </View>
           )}
-          {isLive && state.pot > 0 && (
-            <View style={[styles.potBadge, { backgroundColor: '#A8882A20', borderColor: '#A8882A50' }]}>
-              <Text style={[styles.potText, { color: '#C8A840' }]}>POT {state.pot.toFixed(1)}BB</Text>
-            </View>
-          )}
           <TouchableOpacity
             style={[styles.modeBtn, isPreflopMode && { backgroundColor: '#A8882A30', borderColor: '#A8882A80' }]}
             onPress={() => setTrainingMode(isPreflopMode ? 'full' : 'preflop')}
