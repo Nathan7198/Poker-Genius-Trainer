@@ -27,12 +27,13 @@ function cardLabel(rank: string, suit: string) {
 }
 
 export default function PlayScreen() {
-  const { state, startNewHand, setDifficulty } = useGame();
+  const { state, startNewHand, setDifficulty, setTrainingMode } = useGame();
   const { logHandHistory, recordHandResult } = useStats();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const [showDifficultyPicker, setShowDifficultyPicker] = React.useState(false);
   const [showHandReport, setShowHandReport] = React.useState(false);
+  const isPreflopMode = state.trainingMode === 'preflop';
 
   const lastLoggedHand = React.useRef<number>(-1);
 
@@ -104,11 +105,14 @@ export default function PlayScreen() {
 
     logHandHistory(entry);
 
-    const won = state.showdownResult === 'hero';
-    const profitBB = won
-      ? Math.round((state.pot - state.heroTotalInvestedBB) * 100) / 100
-      : Math.round(-state.heroTotalInvestedBB * 100) / 100;
-    recordHandResult(won, profitBB);
+    // Skip win/loss tracking for preflop-only drills (no cards played out)
+    if (state.trainingMode === 'full') {
+      const won = state.showdownResult === 'hero';
+      const profitBB = won
+        ? Math.round((state.pot - state.heroTotalInvestedBB) * 100) / 100
+        : Math.round(-state.heroTotalInvestedBB * 100) / 100;
+      recordHandResult(won, profitBB);
+    }
   }, [state.phase, state.handNumber]);
 
   const isIdle = state.phase === 'idle';
@@ -181,6 +185,14 @@ export default function PlayScreen() {
               <Text style={[styles.potText, { color: '#C8A840' }]}>POT {state.pot.toFixed(1)}BB</Text>
             </View>
           )}
+          <TouchableOpacity
+            style={[styles.modeBtn, isPreflopMode && { backgroundColor: '#A8882A30', borderColor: '#A8882A80' }]}
+            onPress={() => setTrainingMode(isPreflopMode ? 'full' : 'preflop')}
+          >
+            <Text style={[styles.modeBtnText, { color: isPreflopMode ? colors.goldLight : colors.mutedForeground }]}>
+              {isPreflopMode ? 'PRE' : 'ALL'}
+            </Text>
+          </TouchableOpacity>
           <TouchableOpacity
             style={[styles.diffBtn, { backgroundColor: diffColors[state.difficulty] + '22', borderColor: diffColors[state.difficulty] + '66' }]}
             onPress={() => setShowDifficultyPicker(!showDifficultyPicker)}
@@ -278,12 +290,19 @@ export default function PlayScreen() {
         <View style={[styles.sdFooter, { borderTopColor: colors.border }]}>
           {/* Winner badge + hand names */}
           <View style={styles.sdResultSection}>
-            {resultConfig && (
+            {isPreflopMode && !state.showdownResult ? (
+              <View style={[styles.sdWinBadge, { backgroundColor: '#A8882A18', borderColor: '#A8882A50' }]}>
+                <Text style={[styles.sdWinLabel, { color: colors.goldLight }]}>PREFLOP DRILL COMPLETE</Text>
+                <Text style={[styles.sdWinSub, { color: colors.mutedForeground }]}>
+                  {state.analysis?.isGTO ? '✓ GTO decision' : '✗ Mistake — see coach for details'}
+                </Text>
+              </View>
+            ) : resultConfig ? (
               <View style={[styles.sdWinBadge, { backgroundColor: resultConfig.bg, borderColor: resultConfig.color + '60' }]}>
                 <Text style={[styles.sdWinLabel, { color: resultConfig.color }]}>{resultConfig.label}</Text>
                 <Text style={[styles.sdWinSub, { color: colors.mutedForeground }]}>{resultConfig.sublabel}</Text>
               </View>
-            )}
+            ) : null}
             {state.heroCards.length === 2 && (
               <View style={[styles.sdHandRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <View style={styles.sdHandItem}>
@@ -361,6 +380,8 @@ const styles = StyleSheet.create({
   streetBadgeText: { fontSize: 10, fontWeight: '800', letterSpacing: 1 },
   potBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1 },
   potText: { fontSize: 10, fontWeight: '700' },
+  modeBtn: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1, borderColor: '#333', backgroundColor: '#181818' },
+  modeBtnText: { fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
   diffBtn: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1 },
   diffBtnText: { fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
   diffPicker: {

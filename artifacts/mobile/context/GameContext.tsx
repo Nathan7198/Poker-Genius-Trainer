@@ -132,10 +132,13 @@ export interface GameState {
   heroCheckedStreet: PostFlopStreet | null;
   /** Total chips hero has put into the pot this hand (for profit tracking) */
   heroTotalInvestedBB: number;
+  /** When 'preflop', hands end immediately after the preflop decision for rapid drilling */
+  trainingMode: 'full' | 'preflop';
 }
 
 type GameAction =
   | { type: 'SET_DIFFICULTY'; difficulty: Difficulty }
+  | { type: 'SET_TRAINING_MODE'; mode: 'full' | 'preflop' }
   | { type: 'START_HAND' }
   | { type: 'HERO_ACT'; action: HeroAction; raiseBB?: number }
   | { type: 'HERO_POSTFLOP_ACT'; action: PostFlopHeroAction; betPct?: number }
@@ -161,6 +164,7 @@ function buildInitialState(): GameState {
     postFlopStreetsDone: [], recentBoardSigs: [],
     showdownResult: null, villainFolded: false,
     heroCheckedStreet: null, heroTotalInvestedBB: 0,
+    trainingMode: 'full',
   };
 }
 
@@ -452,6 +456,9 @@ function gameReducer(state: GameState, action: GameAction): GameState {
     case 'SET_DIFFICULTY':
       return { ...state, difficulty: action.difficulty };
 
+    case 'SET_TRAINING_MODE':
+      return { ...state, trainingMode: action.mode };
+
     case 'START_HAND': {
       const heroPosition = POSITIONS[state.handNumber % POSITIONS.length];
       const recentSigs = state.recentBoardSigs;
@@ -601,6 +608,20 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           analysis, showAnalysis: true, lastHeroAction: heroAction,
           heroIsAggressor: heroAction === 'raise',
           showdownResult: 'hero', villainFolded: true,
+          heroTotalInvestedBB: heroAlreadyIn + heroBet,
+          heroCheckedStreet: null,
+        };
+      }
+
+      // Preflop-only mode — end the hand here for rapid drilling
+      if (state.trainingMode === 'preflop') {
+        return {
+          ...state,
+          players: state.players.map(p => ({ ...p, action: null })),
+          phase: 'showdown', heroBet, pot: preflopPot,
+          analysis, showAnalysis: true, lastHeroAction: heroAction,
+          heroIsAggressor: heroAction === 'raise',
+          showdownResult: null, villainFolded: false,
           heroTotalInvestedBB: heroAlreadyIn + heroBet,
           heroCheckedStreet: null,
         };
@@ -985,6 +1006,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 interface GameContextType {
   state: GameState;
   setDifficulty: (d: Difficulty) => void;
+  setTrainingMode: (mode: 'full' | 'preflop') => void;
   startNewHand: () => void;
   heroAct: (action: HeroAction, raiseBB?: number) => void;
   heroPostFlopAct: (action: PostFlopHeroAction, betPct?: number) => void;
@@ -998,6 +1020,7 @@ const GameContext = createContext<GameContextType | null>(null);
 export function GameProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(gameReducer, buildInitialState());
   const setDifficulty = useCallback((d: Difficulty) => dispatch({ type: 'SET_DIFFICULTY', difficulty: d }), []);
+  const setTrainingMode = useCallback((mode: 'full' | 'preflop') => dispatch({ type: 'SET_TRAINING_MODE', mode }), []);
   const startNewHand = useCallback(() => dispatch({ type: 'START_HAND' }), []);
   const heroAct = useCallback((a: HeroAction, raiseBB?: number) => dispatch({ type: 'HERO_ACT', action: a, raiseBB }), []);
   const heroPostFlopAct = useCallback((a: PostFlopHeroAction, betPct?: number) => dispatch({ type: 'HERO_POSTFLOP_ACT', action: a, betPct }), []);
@@ -1006,7 +1029,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const dismissAnalysis = useCallback(() => dispatch({ type: 'DISMISS_ANALYSIS' }), []);
 
   return (
-    <GameContext.Provider value={{ state, setDifficulty, startNewHand, heroAct, heroPostFlopAct, advancePhase, foldToVillainBet, dismissAnalysis }}>
+    <GameContext.Provider value={{ state, setDifficulty, setTrainingMode, startNewHand, heroAct, heroPostFlopAct, advancePhase, foldToVillainBet, dismissAnalysis }}>
       {children}
     </GameContext.Provider>
   );
