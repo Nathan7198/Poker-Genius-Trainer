@@ -24,7 +24,10 @@ export default function ActionPanel() {
 
   const isPreflop = state.phase === 'preflop';
   const isPostFlop = ['flop', 'turn', 'river'].includes(state.phase);
-  const visible = (isPreflop || isPostFlop) && !state.showAnalysis;
+  // Hide the panel after the current street's action is complete — prevents re-acting on
+  // the same street if the user taps X to dismiss the analysis instead of "Deal Turn".
+  const postFlopAlreadyDone = isPostFlop && state.postFlopStreetsDone.includes(state.phase as 'flop' | 'turn' | 'river');
+  const visible = (isPreflop || isPostFlop) && !state.showAnalysis && !postFlopAlreadyDone;
 
   // Reset bet/raise mode when phase changes
   React.useEffect(() => { setRaiseMode(false); setBetMode(false); }, [state.phase]);

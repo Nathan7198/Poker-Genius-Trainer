@@ -663,6 +663,11 @@ function gameReducer(state: GameState, action: GameAction): GameState {
     case 'HERO_POSTFLOP_ACT': {
       const { action: heroAction, betPct = 0 } = action;
       const street = state.phase as PostFlopStreet;
+
+      // Guard: prevent re-acting on a street that is already complete
+      // (can happen if user taps X on the analysis modal instead of "Deal Turn")
+      if (state.postFlopStreetsDone.includes(street)) return state;
+
       const board = state.communityCards.filter(c => c.faceUp);
       const betBB = Math.round((betPct / 100) * state.pot * 10) / 10;
 

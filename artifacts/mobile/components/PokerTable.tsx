@@ -95,12 +95,21 @@ export default function PokerTable() {
         })}
 
         {/* Pot display — sits in the clear band below upper seats */}
-        {state.pot > 0 && (
-          <View style={styles.potBadge}>
-            <Text style={styles.potLabel}>POT</Text>
-            <Text style={styles.potAmount}>{state.pot.toFixed(1)} BB</Text>
-          </View>
-        )}
+        {state.pot > 0 && (() => {
+          // During the preflop analysis modal (phase flipped to 'flop' early), state.pot
+          // already includes villain's opening flop bet.  Show the preflop-only total so
+          // the badge doesn't look inflated while the user reads the preflop feedback.
+          const isPreflopModal = state.showAnalysis && state.analysis !== null && state.postFlopAnalysis === null;
+          const displayPot = isPreflopModal
+            ? Math.max(0, state.pot - (state.villainPostFlopAction?.betBB ?? 0))
+            : state.pot;
+          return (
+            <View style={styles.potBadge}>
+              <Text style={styles.potLabel}>POT</Text>
+              <Text style={styles.potAmount}>{displayPot.toFixed(1)} BB</Text>
+            </View>
+          );
+        })()}
 
         {/* Community cards — in the clear band above lower seats */}
         <View style={styles.communityCards}>
