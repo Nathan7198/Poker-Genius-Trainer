@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useGame } from '@/context/GameContext';
-import { POSITIONS } from '@/constants/pokerData';
+import { POSITIONS, Position } from '@/constants/pokerData';
 import PlayingCard from './PlayingCard';
 import PlayerSeat from './PlayerSeat';
 
@@ -64,12 +64,31 @@ export default function PokerTable() {
   // correct physical seat (e.g. SB = rank 5 from BB → always lower-right).
   const heroIdx = POSITIONS.indexOf(state.heroPosition);
   const isPostFlop = ['flop', 'turn', 'river', 'showdown'].includes(state.phase);
+
+  const handActiveSet = new Set(state.handActivePlayers);
   const playerSeats = state.players
-    .filter(p => !isPostFlop || p.isActive || p.position === state.mainVillainPosition)
+    .filter(p => {
+      if (!isPostFlop) return true;
+      if (state.phase === 'showdown') return p.isActive || p.position === state.mainVillainPosition;
+      if (handActiveSet.size > 0) return handActiveSet.has(p.position as Position);
+      return p.isActive || p.position === state.mainVillainPosition;
+    })
     .map(p => {
       const pi = POSITIONS.indexOf(p.position as (typeof POSITIONS)[number]);
       const rank = (pi - heroIdx + POSITIONS.length) % POSITIONS.length; // 1..5
-      return { player: p, seatIdx: rank - 1 }; // seatIdx 0..4
+
+      let displayPlayer = p;
+      if (isPostFlop) {
+        const psa = state.playerStreetActions[p.position as Position];
+        const showChip = psa?.action === 'bet' || psa?.action === 'raise' || psa?.action === 'call';
+        displayPlayer = {
+          ...p,
+          action: psa?.action ?? null,
+          currentBet: showChip ? (psa?.betBB ?? 0) : 0,
+        };
+      }
+
+      return { player: displayPlayer, seatIdx: rank - 1 }; // seatIdx 0..4
     })
     .filter(s => s.seatIdx >= 0 && s.seatIdx < 5);
 
@@ -95,21 +114,12 @@ export default function PokerTable() {
         })}
 
         {/* Pot display — sits in the clear band below upper seats */}
-        {state.pot > 0 && (() => {
-          // During the preflop analysis modal (phase flipped to 'flop' early), state.pot
-          // already includes villain's opening flop bet.  Show the preflop-only total so
-          // the badge doesn't look inflated while the user reads the preflop feedback.
-          const isPreflopModal = state.showAnalysis && state.analysis !== null && state.postFlopAnalysis === null;
-          const displayPot = isPreflopModal
-            ? Math.max(0, state.pot - (state.villainPostFlopAction?.betBB ?? 0))
-            : state.pot;
-          return (
-            <View style={styles.potBadge}>
-              <Text style={styles.potLabel}>POT</Text>
-              <Text style={styles.potAmount}>{displayPot.toFixed(1)} BB</Text>
-            </View>
-          );
-        })()}
+        {state.pot > 0 && (
+          <View style={styles.potBadge}>
+            <Text style={styles.potLabel}>POT</Text>
+            <Text style={styles.potAmount}>{state.pot.toFixed(1)} BB</Text>
+          </View>
+        )}
 
         {/* Community cards — in the clear band above lower seats */}
         <View style={styles.communityCards}>

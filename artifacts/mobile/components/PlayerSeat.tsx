@@ -15,6 +15,7 @@ const ACTION_COLORS: Record<string, string> = {
   fold: '#95A5A6',
   call: '#3498DB',
   raise: '#E67E22',
+  bet: '#E67E22',
   check: '#27AE60',
 };
 
@@ -69,7 +70,13 @@ export default function PlayerSeat({ player, showCards }: PlayerSeatProps) {
       {/* Action bubble */}
       {player.action && !folded && (
         <View style={[styles.actionBubble, { backgroundColor: ACTION_COLORS[player.action] ?? '#666' }]}>
-          <Text style={styles.actionText}>{player.action.toUpperCase()}</Text>
+          <Text style={styles.actionText} numberOfLines={1}>
+            {(player.action === 'raise' || player.action === 'bet') && player.currentBet > 0
+              ? `${player.action.toUpperCase()} ${player.currentBet}BB`
+              : player.action === 'call' && player.currentBet > 0
+                ? `CALL ${player.currentBet}BB`
+                : player.action.toUpperCase()}
+          </Text>
         </View>
       )}
       {folded && (
@@ -78,10 +85,10 @@ export default function PlayerSeat({ player, showCards }: PlayerSeatProps) {
         </View>
       )}
 
-      {/* Current bet */}
+      {/* Current bet chip */}
       {player.currentBet > 0 && (
         <View style={styles.betBadge}>
-          <Text style={styles.betText}>{player.currentBet}BB</Text>
+          <Text style={styles.betText}>{Number.isInteger(player.currentBet) ? player.currentBet : player.currentBet.toFixed(1)}BB</Text>
         </View>
       )}
 
@@ -167,7 +174,7 @@ const styles = StyleSheet.create({
   },
   actionText: {
     color: '#FFF',
-    fontSize: 8,
+    fontSize: 7.5,
     fontWeight: '700',
   },
   betBadge: {
