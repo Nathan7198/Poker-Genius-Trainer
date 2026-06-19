@@ -2,7 +2,7 @@ import React, {
   createContext, useCallback, useContext, useReducer,
 } from 'react';
 import {
-  Card, MistakeType, Position, POSITIONS, PlayerType, Difficulty,
+  Card, MistakeType, Position, POSITIONS, PlayerType, Difficulty, Rank, Suit,
   createDeck, shuffleDeck, getHandNotation, getEquity, calcPotOdds,
   getHandStrength, GTO_RANGES, BB_DEFENSE, simulateBotAction, simulateBotGTOAction,
   THREEBET_VALUE, RANK_VALUES,
@@ -92,6 +92,15 @@ export interface VillainPostFlopAction {
 
 export type ShowdownResult = 'hero'|'villain'|'tie';
 
+export interface CustomHandConfig {
+  heroPosition: Position | null;
+  heroCard1: { rank: string; suit: string } | null;
+  heroCard2: { rank: string; suit: string } | null;
+  opponentType: PlayerType | null;
+  startStreet: 'preflop' | 'flop' | 'turn' | 'river';
+  communityCards: ({ rank: string; suit: string } | null)[];
+}
+
 export interface GameState {
   phase: GamePhase;
   deck: Card[];
@@ -132,8 +141,8 @@ export interface GameState {
   heroCheckedStreet: PostFlopStreet | null;
   /** Total chips hero has put into the pot this hand (for profit tracking) */
   heroTotalInvestedBB: number;
-  /** 'full' = all streets, 'preflop' = preflop drill only, 'gto' = full hand with always-on GTO coaching */
-  trainingMode: 'full' | 'preflop' | 'gto';
+  /** 'full' = all streets, 'preflop' = preflop drill only, 'gto' = full hand with always-on GTO coaching, 'custom' = user-configured scenario */
+  trainingMode: 'full' | 'preflop' | 'gto' | 'custom';
   /** Non-hero positions still active in the hand (post-preflop) */
   handActivePlayers: Position[];
   /** Current street's action for each non-hero active player (for display + pot) */
@@ -142,8 +151,10 @@ export interface GameState {
 
 type GameAction =
   | { type: 'SET_DIFFICULTY'; difficulty: Difficulty }
-  | { type: 'SET_TRAINING_MODE'; mode: 'full' | 'preflop' | 'gto' }
+  | { type: 'SET_TRAINING_MODE'; mode: 'full' | 'preflop' | 'gto' | 'custom' }
   | { type: 'START_HAND' }
+  | { type: 'START_CUSTOM_HAND'; config: CustomHandConfig }
+  | { type: 'GO_IDLE' }
   | { type: 'HERO_ACT'; action: HeroAction; raiseBB?: number }
   | { type: 'HERO_POSTFLOP_ACT'; action: PostFlopHeroAction; betPct?: number }
   | { type: 'ADVANCE_PHASE' }
@@ -1160,6 +1171,133 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       return state;
     }
 
+    case 'GO_IDLE':
+      return { ...state, phase: 'idle' };
+
+    case 'START_CUSTOM_HAND': {
+      const cfg = action.config;
+      const heroPosition = cfg.heroPosition ?? POSITIONS[state.handNumber % POSITIONS.length];
+      const heroBlind = heroPosition === 'BB' ? 1 : heroPosition === 'SB' ? 0.5 : 0;
+
+      let workDeck = shuffleDeck(createDeck());
+
+      // Remove all specified cards up-front to prevent duplicates
+      const specsToRemove = [
+        cfg.heroCard1, cfg.heroCard2, ...cfg.communityCards,
+      ].filter(Boolean) as { rank: string; suit: string }[];
+      for (const spec of specsToRemove) {
+        const idx = workDeck.findIndex(c => c.rank === spec.rank && c.suit === spec.suit);
+        if (idx !== -1) workDeck.splice(idx, 1);
+      }
+
+      // Hero cards
+      const heroCards: Card[] = [];
+      if (cfg.heroCard1) {
+        heroCards.push({ rank: cfg.heroCard1.rank as Rank, suit: cfg.heroCard1.suit as Suit, faceUp: true });
+      } else {
+        const [h, r] = dealCards(workDeck, 1); heroCards.push(h[0]); workDeck = r;
+      }
+      if (cfg.heroCard2) {
+        heroCards.push({ rank: cfg.heroCard2.rank as Rank, suit: cfg.heroCard2.suit as Suit, faceUp: true });
+      } else {
+        const [h, r] = dealCards(workDeck, 1); heroCards.push(h[0]); workDeck = r;
+      }
+
+      // Opponent type (random cycles through 5 unique types)
+      const UNIQUE_TYPES: PlayerType[] = ['TAG', 'LAG', 'Nit', 'Fish', 'Maniac'];
+      const oppType = cfg.opponentType ?? UNIQUE_TYPES[state.handNumber % UNIQUE_TYPES.length];
+
+      // Bot players (all same type as configured)
+      const otherPositions = POSITIONS.filter(p => p !== heroPosition);
+      const botPlayers: BotPlayer[] = [];
+      for (let i = 0; i < Math.min(5, otherPositions.length); i++) {
+        const [bc, r] = dealCards(workDeck, 2); workDeck = r;
+        botPlayers.push({
+          id: i, name: PLAYER_NAMES[i % PLAYER_NAMES.length],
+          type: oppType, position: otherPositions[i],
+          cards: bc.map(c => ({ ...c, faceUp: false })),
+          stack: otherPositions[i] === 'BB' ? 99 : otherPositions[i] === 'SB' ? 99.5 : 100,
+          currentBet: 0, action: null, isActive: true,
+          isDealer: otherPositions[i] === 'BTN',
+        });
+      }
+
+      // Community cards (specified or drawn from remaining deck)
+      const allComm: Card[] = [];
+      for (let i = 0; i < 5; i++) {
+        const spec = cfg.communityCards[i];
+        if (spec) {
+          allComm.push({ rank: spec.rank as Rank, suit: spec.suit as Suit, faceUp: false });
+        } else {
+          const [dc, r] = dealCards(workDeck, 1); allComm.push({ ...dc[0], faceUp: false }); workDeck = r;
+        }
+      }
+
+      const sig = flopSig(allComm);
+      const newRecentSigs = [...state.recentBoardSigs.slice(-(BOARD_SIG_WINDOW - 1)), sig];
+
+      if (cfg.startStreet === 'preflop') {
+        const { players: updatedPlayers, actionCtx, pot } = simulateBotPreflop(botPlayers, heroPosition, false);
+        const mainVillain = getMainVillain(updatedPlayers);
+        return {
+          ...state,
+          phase: 'preflop', deck: workDeck, heroCards,
+          communityCards: allComm,
+          heroPosition, heroStack: 100 - heroBlind, heroBet: 0, pot,
+          currentBet: actionCtx.facingRaise ? actionCtx.raiseAmount : 0,
+          players: updatedPlayers, handNumber: state.handNumber + 1,
+          actionCtx, analysis: null, postFlopAnalysis: null,
+          postFlopAnalysisHistory: [], showAnalysis: false,
+          lastHeroAction: null, heroIsAggressor: false, villainPostFlopAction: null,
+          mainVillainType: mainVillain.type, mainVillainPosition: mainVillain.position,
+          heroActsFirst: false, postFlopStreetsDone: [],
+          recentBoardSigs: newRecentSigs,
+          showdownResult: null, villainFolded: false,
+          heroCheckedStreet: null, heroTotalInvestedBB: heroBlind,
+          handActivePlayers: [], playerStreetActions: {},
+        };
+      }
+
+      // Post-flop custom start: reveal board cards, skip preflop
+      const CARD_COUNTS: Record<string, number> = { flop: 3, turn: 4, river: 5 };
+      const DEFAULT_POTS: Record<string, number> = { flop: 6.5, turn: 15, river: 30 };
+      const APPROX_STACKS: Record<string, number> = { flop: 97, turn: 90, river: 75 };
+      const visCount = CARD_COUNTS[cfg.startStreet] ?? 3;
+      const startPot = DEFAULT_POTS[cfg.startStreet] ?? 6.5;
+      const heroStack = APPROX_STACKS[cfg.startStreet] ?? 97;
+      const revealedComm = allComm.map((c, i) => ({ ...c, faceUp: i < visCount }));
+
+      const mainVillain = getMainVillain(botPlayers);
+      const POSTFLOP_ORDER: Position[] = ['SB', 'BB', 'UTG', 'HJ', 'CO', 'BTN'];
+      const heroActsFirst = POSTFLOP_ORDER.indexOf(heroPosition) < POSTFLOP_ORDER.indexOf(mainVillain.position);
+      const visBoard = revealedComm.filter(c => c.faceUp);
+      const villain = heroActsFirst
+        ? null
+        : simulateVillainPostFlop(mainVillain.type, analyzeBoardTexture(visBoard).texture, startPot, 'none', mainVillain.cards, visBoard);
+      const finalPot = startPot + (villain?.betBB ?? 0);
+      const streetActions: Partial<Record<Position, { action: VillainActionType; betBB: number }>> = villain
+        ? { [mainVillain.position]: { action: villain.action, betBB: villain.betBB } }
+        : {};
+
+      return {
+        ...state,
+        phase: cfg.startStreet as GamePhase, deck: workDeck, heroCards, communityCards: revealedComm,
+        heroPosition, heroStack, heroBet: 0, pot: finalPot, currentBet: 0,
+        players: botPlayers, handNumber: state.handNumber + 1,
+        actionCtx: { facingRaise: false, raiseAmount: 0, potSize: finalPot, calledByCount: 0, raisedByPosition: null },
+        analysis: null, postFlopAnalysis: null, postFlopAnalysisHistory: [],
+        showAnalysis: false, lastHeroAction: null, heroIsAggressor: false,
+        villainPostFlopAction: villain,
+        mainVillainType: mainVillain.type, mainVillainPosition: mainVillain.position,
+        heroActsFirst, postFlopStreetsDone: [],
+        recentBoardSigs: newRecentSigs,
+        showdownResult: null, villainFolded: false, heroCheckedStreet: null,
+        heroTotalInvestedBB: heroBlind + 3.25,
+        handActivePlayers: botPlayers.map(p => p.position as Position),
+        playerStreetActions: streetActions,
+      };
+    }
+
     case 'DISMISS_ANALYSIS':
       return { ...state, showAnalysis: false };
 
@@ -1179,8 +1317,10 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 interface GameContextType {
   state: GameState;
   setDifficulty: (d: Difficulty) => void;
-  setTrainingMode: (mode: 'full' | 'preflop' | 'gto') => void;
+  setTrainingMode: (mode: 'full' | 'preflop' | 'gto' | 'custom') => void;
   startNewHand: () => void;
+  startCustomHand: (config: CustomHandConfig) => void;
+  goIdle: () => void;
   heroAct: (action: HeroAction, raiseBB?: number) => void;
   heroPostFlopAct: (action: PostFlopHeroAction, betPct?: number) => void;
   advancePhase: () => void;
@@ -1193,8 +1333,10 @@ const GameContext = createContext<GameContextType | null>(null);
 export function GameProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(gameReducer, buildInitialState());
   const setDifficulty = useCallback((d: Difficulty) => dispatch({ type: 'SET_DIFFICULTY', difficulty: d }), []);
-  const setTrainingMode = useCallback((mode: 'full' | 'preflop' | 'gto') => dispatch({ type: 'SET_TRAINING_MODE', mode }), []);
+  const setTrainingMode = useCallback((mode: 'full' | 'preflop' | 'gto' | 'custom') => dispatch({ type: 'SET_TRAINING_MODE', mode }), []);
   const startNewHand = useCallback(() => dispatch({ type: 'START_HAND' }), []);
+  const startCustomHand = useCallback((config: CustomHandConfig) => dispatch({ type: 'START_CUSTOM_HAND', config }), []);
+  const goIdle = useCallback(() => dispatch({ type: 'GO_IDLE' }), []);
   const heroAct = useCallback((a: HeroAction, raiseBB?: number) => dispatch({ type: 'HERO_ACT', action: a, raiseBB }), []);
   const heroPostFlopAct = useCallback((a: PostFlopHeroAction, betPct?: number) => dispatch({ type: 'HERO_POSTFLOP_ACT', action: a, betPct }), []);
   const advancePhase = useCallback(() => dispatch({ type: 'ADVANCE_PHASE' }), []);
@@ -1202,7 +1344,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const dismissAnalysis = useCallback(() => dispatch({ type: 'DISMISS_ANALYSIS' }), []);
 
   return (
-    <GameContext.Provider value={{ state, setDifficulty, setTrainingMode, startNewHand, heroAct, heroPostFlopAct, advancePhase, foldToVillainBet, dismissAnalysis }}>
+    <GameContext.Provider value={{ state, setDifficulty, setTrainingMode, startNewHand, startCustomHand, goIdle, heroAct, heroPostFlopAct, advancePhase, foldToVillainBet, dismissAnalysis }}>
       {children}
     </GameContext.Provider>
   );

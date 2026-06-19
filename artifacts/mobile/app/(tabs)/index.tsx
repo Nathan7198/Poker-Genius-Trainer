@@ -13,6 +13,7 @@ import PokerTable from '@/components/PokerTable';
 import ActionPanel from '@/components/ActionPanel';
 import CoachModal from '@/components/CoachModal';
 import HandReportModal from '@/components/HandReportModal';
+import CustomSetup from '@/components/CustomSetup';
 import {
   DIFFICULTIES, DIFFICULTY_DESCRIPTIONS, getHandNotation,
   evaluateMadeHand, MADE_HAND_COLORS,
@@ -27,7 +28,7 @@ function cardLabel(rank: string, suit: string) {
 }
 
 export default function PlayScreen() {
-  const { state, startNewHand, setDifficulty, setTrainingMode } = useGame();
+  const { state, startNewHand, setDifficulty, setTrainingMode, goIdle } = useGame();
   const { logHandHistory, recordHandResult } = useStats();
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -110,8 +111,8 @@ export default function PlayScreen() {
 
     logHandHistory(entry);
 
-    // Skip win/loss tracking for preflop-only drills (no cards played out)
-    if (state.trainingMode === 'full') {
+    // Skip win/loss tracking for preflop-only drills and GTO mode
+    if (state.trainingMode === 'full' || state.trainingMode === 'custom') {
       const won = state.showdownResult === 'hero';
       const profitBB = won
         ? Math.round((state.pot - state.heroTotalInvestedBB) * 100) / 100
@@ -200,8 +201,16 @@ export default function PlayScreen() {
               onPress={() => { setShowModePicker(!showModePicker); setShowDifficultyPicker(false); }}
             >
               <Text style={styles.modeBtnLabel}>MODE</Text>
-              <Text style={[styles.modeBtnText, { color: state.trainingMode === 'gto' ? '#27AE60' : isPreflopMode ? colors.goldLight : colors.foreground }]}>
-                {state.trainingMode === 'gto' ? 'GTO' : isPreflopMode ? 'Pre Flop' : 'Full Hands'}
+              <Text style={[styles.modeBtnText, {
+                color: state.trainingMode === 'gto' ? '#27AE60'
+                  : state.trainingMode === 'custom' ? '#3498DB'
+                  : isPreflopMode ? colors.goldLight
+                  : colors.foreground,
+              }]}>
+                {state.trainingMode === 'gto' ? 'GTO'
+                  : state.trainingMode === 'custom' ? 'Custom'
+                  : isPreflopMode ? 'Pre Flop'
+                  : 'Full Hands'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -220,7 +229,7 @@ export default function PlayScreen() {
       {/* Mode picker — rendered outside header so touches aren't clipped */}
       {showModePicker && (
         <View style={[styles.modePicker, { backgroundColor: colors.card, borderColor: colors.border, top: modeBtnY + modeBtnH + 4, left: modeBtnX }]}>
-          {([['full', 'Full Hands'], ['preflop', 'Pre Flop'], ['gto', 'GTO Mode']] as const).map(([val, label]) => {
+          {([['full', 'Full Hands'], ['preflop', 'Pre Flop'], ['gto', 'GTO Mode'], ['custom', 'Custom']] as const).map(([val, label]) => {
             const isSelected = state.trainingMode === val;
             return (
               <TouchableOpacity
@@ -307,14 +316,18 @@ export default function PlayScreen() {
 
         {/* Idle */}
         {isIdle && (
-          <View style={styles.centerActions}>
-            <TouchableOpacity style={[styles.dealBtn, { backgroundColor: colors.gold }]} onPress={handleNewHand}>
-              <Text style={[styles.dealBtnText, { color: '#0A0A0A' }]}>DEAL CARDS</Text>
-            </TouchableOpacity>
-            <Text style={[styles.idleSubtext, { color: colors.mutedForeground }]}>
-              Hero always at bottom · Boards never repeat · Full street coaching
-            </Text>
-          </View>
+          state.trainingMode === 'custom' ? (
+            <CustomSetup />
+          ) : (
+            <View style={styles.centerActions}>
+              <TouchableOpacity style={[styles.dealBtn, { backgroundColor: colors.gold }]} onPress={handleNewHand}>
+                <Text style={[styles.dealBtnText, { color: '#0A0A0A' }]}>DEAL CARDS</Text>
+              </TouchableOpacity>
+              <Text style={[styles.idleSubtext, { color: colors.mutedForeground }]}>
+                Hero always at bottom · Boards never repeat · Full street coaching
+              </Text>
+            </View>
+          )
         )}
 
       </ScrollView>
@@ -386,10 +399,12 @@ export default function PlayScreen() {
             )}
             <TouchableOpacity
               style={[styles.nextHandFixed, { backgroundColor: colors.gold, flex: 1 }]}
-              onPress={handleNewHand}
+              onPress={state.trainingMode === 'custom' ? goIdle : handleNewHand}
               activeOpacity={0.85}
             >
-              <Text style={styles.nextHandFixedText}>NEXT HAND →</Text>
+              <Text style={styles.nextHandFixedText}>
+                {state.trainingMode === 'custom' ? 'CONFIGURE HAND ↺' : 'NEXT HAND →'}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
