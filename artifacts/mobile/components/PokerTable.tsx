@@ -56,36 +56,36 @@ export default function PokerTable() {
     };
   }
 
-  // Map each opponent to a fixed seat slot by their clockwise rank from hero.
-  // Use PREFLOP_ORDER (all 9 positions) so new positions like UTG2/MP work.
+  // Sort bots by their clockwise distance from hero in PREFLOP_ORDER so they
+  // get consecutive seatIdx values 0..N-1 regardless of which positions are
+  // active (6-max skips UTG2/UTG3/MP, 9-max uses all, etc.).
   const heroIdx = PREFLOP_ORDER.indexOf(state.heroPosition);
   const numBots = state.players.length;
   const opponentAngles = getOpponentAngles(numBots);
   const isPostFlop = ['flop', 'turn', 'river', 'showdown'].includes(state.phase);
 
   const handActiveSet = new Set(state.handActivePlayers);
-  const playerSeats = state.players
-    .map(p => {
-      const pi = PREFLOP_ORDER.indexOf(p.position as Position);
-      const rank = (pi - heroIdx + PREFLOP_ORDER.length) % PREFLOP_ORDER.length; // 1..N
-
-      let displayPlayer = p;
-      if (isPostFlop) {
-        const psa = state.playerStreetActions[p.position as Position];
-        const showChip = psa?.action === 'bet' || psa?.action === 'raise' || psa?.action === 'call';
-        // A player is active only if they haven't folded preflop AND are still in handActivePlayers
-        const isActiveMid = p.isActive && (handActiveSet.size === 0 || handActiveSet.has(p.position as Position));
-        displayPlayer = {
-          ...p,
-          isActive: isActiveMid,
-          action: isActiveMid ? (psa?.action ?? null) : null,
-          currentBet: isActiveMid && showChip ? (psa?.betBB ?? 0) : 0,
-        };
-      }
-
-      return { player: displayPlayer, seatIdx: rank - 1 }; // seatIdx 0..N-1
-    })
-    .filter(s => s.seatIdx >= 0 && s.seatIdx < numBots);
+  const sortedBots = [...state.players].sort((a, b) => {
+    const ar = (PREFLOP_ORDER.indexOf(a.position as Position) - heroIdx + PREFLOP_ORDER.length) % PREFLOP_ORDER.length;
+    const br = (PREFLOP_ORDER.indexOf(b.position as Position) - heroIdx + PREFLOP_ORDER.length) % PREFLOP_ORDER.length;
+    return ar - br;
+  });
+  const playerSeats = sortedBots.map((p, seatIdx) => {
+    let displayPlayer = p;
+    if (isPostFlop) {
+      const psa = state.playerStreetActions[p.position as Position];
+      const showChip = psa?.action === 'bet' || psa?.action === 'raise' || psa?.action === 'call';
+      // A player is active only if they haven't folded preflop AND are still in handActivePlayers
+      const isActiveMid = p.isActive && (handActiveSet.size === 0 || handActiveSet.has(p.position as Position));
+      displayPlayer = {
+        ...p,
+        isActive: isActiveMid,
+        action: isActiveMid ? (psa?.action ?? null) : null,
+        currentBet: isActiveMid && showChip ? (psa?.betBB ?? 0) : 0,
+      };
+    }
+    return { player: displayPlayer, seatIdx }; // seatIdx 0..N-1, always consecutive
+  });
 
   return (
     <View style={[styles.outer, { height: TABLE_H + SEAT_OVERFLOW + 90, paddingTop: SEAT_OVERFLOW, width: tableW }]}>
