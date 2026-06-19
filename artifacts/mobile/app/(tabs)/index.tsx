@@ -144,7 +144,7 @@ export default function PlayScreen() {
   };
 
   const isLive = !isIdle && !isShowdown && !state.showAnalysis;
-  const streetBadge = isLive ? ({ flop: 'FLOP', turn: 'TURN', river: 'RIVER' } as Record<string,string>)[state.phase] ?? null : null;
+  const streetBadge = isLive ? ({ preflop: 'PREFLOP', flop: 'FLOP', turn: 'TURN', river: 'RIVER' } as Record<string,string>)[state.phase] ?? null : null;
 
   const TAB_BAR_H = Platform.OS === 'web' ? 84 : 60;
 
