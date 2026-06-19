@@ -203,8 +203,7 @@ const styles = StyleSheet.create({
   },
   potBadge: {
     position: 'absolute',
-    // Sits at 29 % of TABLE_H (~99 px): below top seat (incl. type badge), above community cards
-    top: '29%',
+    top: '22%',
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.55)',
@@ -222,8 +221,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     position: 'absolute',
-    // Sits at 39 % of TABLE_H (~133 px): below upper seats, above lower seats
-    top: '39%',
+    top: '46%',
   },
   preflopHint: {
     paddingHorizontal: 16,
