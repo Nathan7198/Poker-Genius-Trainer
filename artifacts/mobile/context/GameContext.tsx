@@ -1184,17 +1184,29 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 
       if (state.phase === 'river') {
         const board = state.communityCards.filter(c => c.faceUp);
-        // Use the active main villain; fall back to any active bot if they folded
-        const showdownVillain =
-          state.players.find(p => p.position === state.mainVillainPosition && p.isActive)
-          ?? state.players.find(p => (state.handActivePlayers as string[]).includes(p.position))
-          ?? villainPlayer;
+        // Compare hero against ALL active players — pick the one who beats hero (if any),
+        // otherwise the one with the best hand overall.
+        const activePlayers = state.players.filter(p => p.isActive);
+        let showdownVillain = activePlayers[0] ?? villainPlayer;
+        let showdownResult: 'hero' | 'villain' | 'tie' = 'hero';
+        for (const player of activePlayers) {
+          const result = evaluateHandWinner(state.heroCards, player.cards, board);
+          if (result === 'villain') {
+            // This player beats hero — they win
+            showdownVillain = player;
+            showdownResult = 'villain';
+            break;
+          }
+          if (result === 'tie') {
+            showdownResult = 'tie';
+            showdownVillain = player;
+          }
+        }
         const revealedPlayers = state.players.map(p =>
           p.isActive
             ? { ...p, cards: p.cards.map(c => ({ ...c, faceUp: true })) }
             : p
         );
-        const showdownResult = evaluateHandWinner(state.heroCards, showdownVillain.cards, board);
         return {
           ...state,
           players: revealedPlayers,
