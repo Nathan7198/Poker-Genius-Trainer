@@ -779,18 +779,29 @@ function gameReducer(state: GameState, action: GameAction): GameState {
             flopVillainPlayer.cards, visibleBoard,
           );
 
+      // When villain opened (heroActsFirst=false): simulate bg bots reacting to villain's bet/check.
+      // When hero opens (heroActsFirst=true): don't pre-simulate — bots act AFTER hero, so
+      // their chips stay blank until hero acts. All survivors stay in handActivePlayers.
       const bgPositions = survivedPositions.filter(p => p !== flopVillainPos);
-      const bgFlop = simulateOtherPlayers(bgPositions, postPreflopPlayers, villain, preflopPot);
+      const bgFlop = heroActsFirst
+        ? { actions: {}, potAdded: 0, remainingActive: bgPositions }
+        : simulateOtherPlayers(bgPositions, postPreflopPlayers, villain, preflopPot);
       const flopPot = preflopPot + (villain?.betBB ?? 0) + bgFlop.potAdded;
 
-      const flopHandActive: Position[] = [
-        ...(villain?.action !== 'fold' ? [flopVillainPos] : []),
-        ...bgFlop.remainingActive,
-      ];
-      const flopStreetActions: Partial<Record<Position, { action: VillainActionType; betBB: number }>> = {
-        ...bgFlop.actions,
-        ...(villain ? { [flopVillainPos]: { action: villain.action, betBB: villain.betBB } } : {}),
-      };
+      // When hero acts first, include the mainVillain in handActivePlayers from the start
+      // so they're always present for the next street (they act after hero).
+      const flopHandActive: Position[] = heroActsFirst
+        ? survivedPositions
+        : [
+            ...(villain?.action !== 'fold' ? [flopVillainPos] : []),
+            ...bgFlop.remainingActive,
+          ];
+      const flopStreetActions: Partial<Record<Position, { action: VillainActionType; betBB: number }>> = heroActsFirst
+        ? {}
+        : {
+            ...bgFlop.actions,
+            ...(villain ? { [flopVillainPos]: { action: villain.action, betBB: villain.betBB } } : {}),
+          };
 
       const flopPlayers = applyStackDeductions(postPreflopPlayers, flopStreetActions);
       return {
@@ -1116,15 +1127,21 @@ function gameReducer(state: GameState, action: GameAction): GameState {
               state.pot, 'none', turnVillainPlayer.cards, board,
             );
         const bgPosTurn = state.handActivePlayers.filter(p => p !== turnVillainPos);
-        const bgTurn = simulateOtherPlayers(bgPosTurn, state.players, villain, state.pot);
-        const turnHandActive: Position[] = [
-          ...(villain?.action !== 'fold' ? [turnVillainPos] : []),
-          ...bgTurn.remainingActive,
-        ];
-        const turnStreetActions: Partial<Record<Position, { action: VillainActionType; betBB: number }>> = {
-          ...bgTurn.actions,
-          ...(villain ? { [turnVillainPos]: { action: villain.action, betBB: villain.betBB } } : {}),
-        };
+        const bgTurn = turnHeroActsFirst
+          ? { actions: {}, potAdded: 0, remainingActive: bgPosTurn }
+          : simulateOtherPlayers(bgPosTurn, state.players, villain, state.pot);
+        const turnHandActive: Position[] = turnHeroActsFirst
+          ? state.handActivePlayers
+          : [
+              ...(villain?.action !== 'fold' ? [turnVillainPos] : []),
+              ...bgTurn.remainingActive,
+            ];
+        const turnStreetActions: Partial<Record<Position, { action: VillainActionType; betBB: number }>> = turnHeroActsFirst
+          ? {}
+          : {
+              ...bgTurn.actions,
+              ...(villain ? { [turnVillainPos]: { action: villain.action, betBB: villain.betBB } } : {}),
+            };
         const turnPlayers = applyStackDeductions(clearedPlayers, turnStreetActions);
         return {
           ...state, players: turnPlayers, phase: 'turn',
@@ -1158,15 +1175,21 @@ function gameReducer(state: GameState, action: GameAction): GameState {
               state.pot, 'none', riverVillainPlayer.cards, board,
             );
         const bgPosRiver = state.handActivePlayers.filter(p => p !== riverVillainPos);
-        const bgRiver = simulateOtherPlayers(bgPosRiver, state.players, villain, state.pot);
-        const riverHandActive: Position[] = [
-          ...(villain?.action !== 'fold' ? [riverVillainPos] : []),
-          ...bgRiver.remainingActive,
-        ];
-        const riverStreetActions: Partial<Record<Position, { action: VillainActionType; betBB: number }>> = {
-          ...bgRiver.actions,
-          ...(villain ? { [riverVillainPos]: { action: villain.action, betBB: villain.betBB } } : {}),
-        };
+        const bgRiver = riverHeroActsFirst
+          ? { actions: {}, potAdded: 0, remainingActive: bgPosRiver }
+          : simulateOtherPlayers(bgPosRiver, state.players, villain, state.pot);
+        const riverHandActive: Position[] = riverHeroActsFirst
+          ? state.handActivePlayers
+          : [
+              ...(villain?.action !== 'fold' ? [riverVillainPos] : []),
+              ...bgRiver.remainingActive,
+            ];
+        const riverStreetActions: Partial<Record<Position, { action: VillainActionType; betBB: number }>> = riverHeroActsFirst
+          ? {}
+          : {
+              ...bgRiver.actions,
+              ...(villain ? { [riverVillainPos]: { action: villain.action, betBB: villain.betBB } } : {}),
+            };
         const riverPlayers = applyStackDeductions(clearedPlayers, riverStreetActions);
         return {
           ...state, players: riverPlayers, phase: 'river',
