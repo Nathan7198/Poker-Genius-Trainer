@@ -30,9 +30,10 @@ export default function PokerTable() {
   const { state } = useGame();
   const { width, height } = useWindowDimensions();
 
-  // Clamp felt height: reserve top-bar(~52) + tab(~94) + worst-case panel(~290)
-  // + hero row(~90) + padding(~20) = 546. What's left is the felt oval.
-  const TABLE_H = Math.max(220, Math.min(340, height - 546));
+  // Reserve space for: top-bar(~52) + tab(~94) + panel + hero row(~90) + padding(~20).
+  // GTO mode panel is ~50px taller than worst-case non-GTO, so reserve more.
+  const panelReserve = state.trainingMode === 'gto' ? 596 : 546;
+  const TABLE_H = Math.max(200, Math.min(340, height - panelReserve));
   // CY/RY proportional to TABLE_H (original ratios: 155/340, 105/340)
   const CY = Math.round(TABLE_H * 0.456);
   const RY = Math.round(TABLE_H * 0.309);
@@ -95,7 +96,9 @@ export default function PokerTable() {
   return (
     <View style={[styles.outer, { height: TABLE_H + SEAT_OVERFLOW + 90, paddingTop: SEAT_OVERFLOW, width: tableW }]}>
       {/* Table felt */}
-      <View style={[styles.felt, { width: tableW, height: TABLE_H, borderRadius: TABLE_H / 2 + 8 }]}>
+      <View style={[styles.felt, { width: tableW, height: TABLE_H, borderRadius: TABLE_H / 2 }]}>
+        {/* Outer border overlay — rendered as overlay so it doesn't shift absolute children */}
+        <View style={[styles.feltBorder, { borderRadius: TABLE_H / 2 + 8 }]} pointerEvents="none" />
         {/* Inner dashed border */}
         <View style={[styles.feltInner, { width: tableW - 40, height: TABLE_H - 40, borderRadius: TABLE_H / 2 }]} />
 
@@ -116,8 +119,10 @@ export default function PokerTable() {
         {/* Pot display — sits in the clear band below upper seats */}
         {state.pot > 0 && (
           <View style={styles.potBadge}>
-            <Text style={styles.potLabel}>POT</Text>
-            <Text style={styles.potAmount}>{state.pot.toFixed(1)} BB</Text>
+            <View style={styles.potBadgeInner}>
+              <Text style={styles.potLabel}>POT</Text>
+              <Text style={styles.potAmount}>{state.pot.toFixed(1)} BB</Text>
+            </View>
           </View>
         )}
 
@@ -164,7 +169,7 @@ export default function PokerTable() {
             <Text style={styles.heroFoldedLabel}>FOLDED</Text>
           ) : (
             <>
-              <Text style={styles.heroStack}>{state.heroStack}BB</Text>
+              <Text style={styles.heroStack}>{Number.isInteger(state.heroStack) ? state.heroStack : state.heroStack.toFixed(1)}BB</Text>
               {state.heroBet > 0 && (
                 <Text style={styles.heroBetText}>Bet: {state.heroBet}BB</Text>
               )}
@@ -184,16 +189,23 @@ const styles = StyleSheet.create({
   },
   felt: {
     backgroundColor: '#163224',
-    borderWidth: 8,
-    borderColor: '#0A1E14',
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'visible',
+  },
+  feltBorder: {
+    position: 'absolute',
+    top: -8,
+    left: -8,
+    right: -8,
+    bottom: -8,
+    borderWidth: 8,
+    borderColor: '#0A1E14',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.7,
     shadowRadius: 16,
     elevation: 12,
-    overflow: 'visible',
   },
   feltInner: {
     position: 'absolute',
@@ -203,8 +215,12 @@ const styles = StyleSheet.create({
   },
   potBadge: {
     position: 'absolute',
-    // Sits at 29 % of TABLE_H (~99 px): below top seat (incl. type badge), above community cards
-    top: '29%',
+    top: '35%',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  potBadgeInner: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.55)',
@@ -220,10 +236,12 @@ const styles = StyleSheet.create({
   communityCards: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 4,
     position: 'absolute',
-    // Sits at 39 % of TABLE_H (~133 px): below upper seats, above lower seats
-    top: '39%',
+    top: '55%',
+    left: 0,
+    right: 0,
   },
   preflopHint: {
     paddingHorizontal: 16,

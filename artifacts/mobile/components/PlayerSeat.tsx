@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { BotPlayer } from '@/context/GameContext';
+import { BotPlayer, useGame } from '@/context/GameContext';
 import { POSITION_COLORS, PLAYER_TYPE_INFO } from '@/constants/pokerData';
 import PlayingCard from './PlayingCard';
 import { useColors } from '@/hooks/useColors';
@@ -29,9 +29,11 @@ const TYPE_ICONS: Record<string, string> = {
 
 export default function PlayerSeat({ player, showCards }: PlayerSeatProps) {
   const colors = useColors();
+  const { state } = useGame();
   const typeInfo = PLAYER_TYPE_INFO[player.type];
   const posColor = POSITION_COLORS[player.position];
   const folded = !player.isActive;
+  const isGTOMode = state.trainingMode === 'gto';
 
   return (
     <View style={[styles.container, folded && styles.folded]}>
@@ -49,13 +51,15 @@ export default function PlayerSeat({ player, showCards }: PlayerSeatProps) {
         ))}
       </View>
 
-      {/* Player type badge */}
-      <View style={[styles.typeBadge, { backgroundColor: typeInfo.color + '22', borderColor: typeInfo.color + '55' }]}>
-        <Feather name={(TYPE_ICONS[player.type] ?? 'user') as any} size={7} color={typeInfo.color} />
-        <Text style={[styles.typeText, { color: typeInfo.color }]} numberOfLines={1}>
-          {typeInfo.shortLabel} · {typeInfo.vpip}%
-        </Text>
-      </View>
+      {/* Player type badge — hidden in GTO mode (all play standard) */}
+      {!isGTOMode && (
+        <View style={[styles.typeBadge, { backgroundColor: typeInfo.color + '22', borderColor: typeInfo.color + '55' }]}>
+          <Feather name={(TYPE_ICONS[player.type] ?? 'user') as any} size={7} color={typeInfo.color} />
+          <Text style={[styles.typeText, { color: typeInfo.color }]} numberOfLines={1}>
+            {typeInfo.shortLabel} · {typeInfo.vpip}%
+          </Text>
+        </View>
+      )}
 
       {/* Player info */}
       <View style={[styles.info, { backgroundColor: colors.card }]}>
@@ -63,7 +67,7 @@ export default function PlayerSeat({ player, showCards }: PlayerSeatProps) {
           {player.name}
         </Text>
         <Text style={[styles.stack, { color: colors.mutedForeground }]}>
-          {player.stack}BB
+          {Number.isInteger(player.stack) ? player.stack : player.stack.toFixed(1)}BB
         </Text>
       </View>
 

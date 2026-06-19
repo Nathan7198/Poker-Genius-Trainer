@@ -2,9 +2,9 @@ import React, {
   createContext, useCallback, useContext, useReducer,
 } from 'react';
 import {
-  Card, MistakeType, Position, POSITIONS, PlayerType, Difficulty,
+  Card, MistakeType, Position, POSITIONS, PlayerType, Difficulty, Rank, Suit,
   createDeck, shuffleDeck, getHandNotation, getEquity, calcPotOdds,
-  getHandStrength, GTO_RANGES, BB_DEFENSE, simulateBotAction,
+  getHandStrength, GTO_RANGES, BB_DEFENSE, simulateBotAction, simulateBotGTOAction,
   THREEBET_VALUE, RANK_VALUES,
   BoardTextureResult, MadeHand, CbetRecommendation, DrawInfo,
   analyzeBoardTexture, evaluateMadeHand, getCbetRecommendation,
@@ -92,6 +92,15 @@ export interface VillainPostFlopAction {
 
 export type ShowdownResult = 'hero'|'villain'|'tie';
 
+export interface CustomHandConfig {
+  heroPosition: Position | null;
+  heroCard1: { rank: string; suit: string } | null;
+  heroCard2: { rank: string; suit: string } | null;
+  opponentType: PlayerType | null;
+  startStreet: 'preflop' | 'flop' | 'turn' | 'river';
+  communityCards: ({ rank: string; suit: string } | null)[];
+}
+
 export interface GameState {
   phase: GamePhase;
   deck: Card[];
@@ -132,8 +141,8 @@ export interface GameState {
   heroCheckedStreet: PostFlopStreet | null;
   /** Total chips hero has put into the pot this hand (for profit tracking) */
   heroTotalInvestedBB: number;
-  /** When 'preflop', hands end immediately after the preflop decision for rapid drilling */
-  trainingMode: 'full' | 'preflop';
+  /** 'full' = all streets, 'preflop' = preflop drill only, 'gto' = full hand with always-on GTO coaching, 'custom' = user-configured scenario */
+  trainingMode: 'full' | 'preflop' | 'gto' | 'custom';
   /** Non-hero positions still active in the hand (post-preflop) */
   handActivePlayers: Position[];
   /** Current street's action for each non-hero active player (for display + pot) */
@@ -142,8 +151,10 @@ export interface GameState {
 
 type GameAction =
   | { type: 'SET_DIFFICULTY'; difficulty: Difficulty }
-  | { type: 'SET_TRAINING_MODE'; mode: 'full' | 'preflop' }
+  | { type: 'SET_TRAINING_MODE'; mode: 'full' | 'preflop' | 'gto' | 'custom' }
   | { type: 'START_HAND' }
+  | { type: 'START_CUSTOM_HAND'; config: CustomHandConfig }
+  | { type: 'GO_IDLE' }
   | { type: 'HERO_ACT'; action: HeroAction; raiseBB?: number }
   | { type: 'HERO_POSTFLOP_ACT'; action: PostFlopHeroAction; betPct?: number }
   | { type: 'ADVANCE_PHASE' }
@@ -407,7 +418,7 @@ function buildPostFlopAnalysis(
   };
 }
 
-function simulateBotPreflop(players: BotPlayer[], heroPosition: Position): {
+function simulateBotPreflop(players: BotPlayer[], heroPosition: Position, isGTOMode: boolean): {
   players: BotPlayer[]; actionCtx: ActionContext; pot: number;
 } {
   const pfOrder: Position[] = ['UTG','HJ','CO','BTN','SB','BB'];
@@ -418,7 +429,9 @@ function simulateBotPreflop(players: BotPlayer[], heroPosition: Position): {
   const updated = players.map(p => {
     const posIdx = pfOrder.indexOf(p.position);
     if (posIdx < 0 || posIdx >= heroIdx) return p;
-    const botAction = simulateBotAction(p.type, p.position, facingRaise, raiseAmount, pot);
+    const botAction = isGTOMode
+      ? simulateBotGTOAction(p.cards, p.position, facingRaise, raiseAmount, pot)
+      : simulateBotAction(p.type, p.position, facingRaise, raiseAmount, pot);
     // alreadyPosted: blind chips already counted in the starting pot of 1.5
     const alreadyPosted = p.position === 'SB' ? 0.5 : p.position === 'BB' ? 1 : 0;
     // totalCommit: raise-to / call-to amount (used for display + section C formula)
@@ -436,7 +449,8 @@ function simulateBotPreflop(players: BotPlayer[], heroPosition: Position): {
       calledByCount++;
     }
     pot += extraChips;
-    return { ...p, action: botAction, currentBet: totalCommit, isActive: botAction !== 'fold' };
+    return { ...p, action: botAction, currentBet: totalCommit, isActive: botAction !== 'fold',
+             stack: Math.round(Math.max(0, p.stack - extraChips) * 10) / 10 };
   });
 
   // Second pass: if a re-raise happened, earlier callers/raisers must respond.
@@ -449,10 +463,13 @@ function simulateBotPreflop(players: BotPlayer[], heroPosition: Position): {
       if (p.position === raisedByPosition) continue; // the raiser themselves, already settled
       if (p.currentBet > 0 && p.currentBet < raiseAmount) {
         // This player committed chips but less than the final raise — give them a chance to respond
-        const resp = simulateBotAction(p.type, p.position as Position, true, raiseAmount, pot);
+        const resp = isGTOMode
+          ? simulateBotGTOAction(p.cards, p.position, true, raiseAmount, pot)
+          : simulateBotAction(p.type, p.position as Position, true, raiseAmount, pot);
         if (resp !== 'fold') {
-          pot += raiseAmount - p.currentBet;
-          updated[i] = { ...p, currentBet: raiseAmount };
+          const extra = raiseAmount - p.currentBet;
+          pot += extra;
+          updated[i] = { ...p, currentBet: raiseAmount, stack: Math.round(Math.max(0, p.stack - extra) * 10) / 10 };
         } else {
           updated[i] = { ...p, action: 'fold', isActive: false };
         }
@@ -507,6 +524,17 @@ function simulateOtherPlayers(
   return { actions, potAdded, remainingActive };
 }
 
+function applyStackDeductions(
+  players: BotPlayer[],
+  streetActions: Partial<Record<Position, { action: VillainActionType; betBB: number }>>,
+): BotPlayer[] {
+  return players.map(p => {
+    const a = streetActions[p.position as Position];
+    if (!a || a.betBB <= 0) return p;
+    return { ...p, stack: Math.round(Math.max(0, p.stack - a.betBB) * 10) / 10 };
+  });
+}
+
 function revealCommunityCards(cards: Card[], count: number): Card[] {
   let n = 0;
   return cards.map(c => (!c.faceUp && n < count) ? (n++, { ...c, faceUp: true }) : c);
@@ -543,10 +571,10 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           deck = nextDeck;
           players.push({
             id: i, name: PLAYER_NAMES[i % PLAYER_NAMES.length],
-            type: PLAYER_TYPE_LIST[i % PLAYER_TYPE_LIST.length],
+            type: state.trainingMode === 'gto' ? 'TAG' : PLAYER_TYPE_LIST[i % PLAYER_TYPE_LIST.length],
             position: otherPositions[i],
             cards: botCards.map(c => ({ ...c, faceUp: false })),
-            stack: 80 + Math.floor(Math.random() * 60),
+            stack: otherPositions[i] === 'BB' ? 99 : otherPositions[i] === 'SB' ? 99.5 : 100,
             currentBet: 0, action: null, isActive: true,
             isDealer: otherPositions[i] === 'BTN',
           });
@@ -561,17 +589,18 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       deck = deck.slice(5);
 
       const faceDown = communityCards.map(c => ({ ...c, faceUp: false }));
-      const { players: updatedPlayers, actionCtx, pot } = simulateBotPreflop(players, heroPosition);
+      const { players: updatedPlayers, actionCtx, pot } = simulateBotPreflop(players, heroPosition, state.trainingMode === 'gto');
       const mainVillain = getMainVillain(updatedPlayers);
       const mainVillainType = mainVillain.type;
       const mainVillainPosition = mainVillain.position;
       const newRecentSigs = [...recentSigs.slice(-(BOARD_SIG_WINDOW - 1)), sig];
+      const heroBlind = heroPosition === 'BB' ? 1 : heroPosition === 'SB' ? 0.5 : 0;
 
       return {
         ...state,
         phase: 'preflop', deck, heroCards,
         communityCards: faceDown,
-        heroPosition, heroStack: 100, heroBet: 0, pot,
+        heroPosition, heroStack: 100 - heroBlind, heroBet: 0, pot,
         currentBet: actionCtx.facingRaise ? actionCtx.raiseAmount : 0,
         players: updatedPlayers,
         handNumber: state.handNumber + 1,
@@ -583,7 +612,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         postFlopStreetsDone: [],
         recentBoardSigs: newRecentSigs,
         showdownResult: null, villainFolded: false,
-        heroCheckedStreet: null, heroTotalInvestedBB: 0,
+        heroCheckedStreet: null, heroTotalInvestedBB: heroBlind,
         handActivePlayers: [], playerStreetActions: {},
       };
     }
@@ -603,8 +632,9 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       let preflopPot = state.pot + heroBet;
 
       // ── Simulate remaining preflop actors after hero ───────────────────
-      // Track which bots fold so we can detect an uncontested win for hero.
+      // Track which bots fold and how many extra chips each bot commits.
       const foldedInSim = new Set<string>();
+      const extraCommits = new Map<string, number>();
 
       if (heroAction !== 'fold') {
         const pfOrder: Position[] = ['UTG', 'HJ', 'CO', 'BTN', 'SB', 'BB'];
@@ -616,14 +646,18 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           if (!bot.isActive || posIdx <= heroIdx) continue;
           const alreadyIn = bot.position === 'BB' ? 1 : bot.position === 'SB' ? 0.5 : 0;
           const heroRaised = heroAction === 'raise';
-          // Raised: face hero's raise. Pre-existing raise: face that amount. Limped pot: face 1BB call.
           const facingRaiseNow = heroRaised || state.actionCtx.facingRaise;
           const facingAmt = heroRaised ? raiseBB
             : (state.actionCtx.facingRaise ? state.actionCtx.raiseAmount : 1);
           if (facingAmt > alreadyIn) {
-            const resp = simulateBotAction(bot.type, bot.position, facingRaiseNow, facingAmt, preflopPot);
-            if (resp !== 'fold') preflopPot += facingAmt - alreadyIn;
-            else foldedInSim.add(bot.position);
+            const resp = state.trainingMode === 'gto'
+              ? simulateBotGTOAction(bot.cards, bot.position, facingRaiseNow, facingAmt, preflopPot)
+              : simulateBotAction(bot.type, bot.position, facingRaiseNow, facingAmt, preflopPot);
+            if (resp !== 'fold') {
+              const extra = facingAmt - alreadyIn;
+              preflopPot += extra;
+              extraCommits.set(bot.position, (extraCommits.get(bot.position) ?? 0) + extra);
+            } else foldedInSim.add(bot.position);
           }
         }
 
@@ -633,9 +667,14 @@ function gameReducer(state: GameState, action: GameAction): GameState {
             p => p.position === state.actionCtx.raisedByPosition && p.isActive,
           );
           if (origRaiser) {
-            const resp = simulateBotAction(origRaiser.type, origRaiser.position, true, raiseBB, preflopPot);
-            if (resp !== 'fold') preflopPot += Math.max(0, raiseBB - state.actionCtx.raiseAmount);
-            else foldedInSim.add(origRaiser.position);
+            const resp = state.trainingMode === 'gto'
+              ? simulateBotGTOAction(origRaiser.cards, origRaiser.position, true, raiseBB, preflopPot)
+              : simulateBotAction(origRaiser.type, origRaiser.position, true, raiseBB, preflopPot);
+            if (resp !== 'fold') {
+              const extra = Math.max(0, raiseBB - state.actionCtx.raiseAmount);
+              preflopPot += extra;
+              extraCommits.set(origRaiser.position, (extraCommits.get(origRaiser.position) ?? 0) + extra);
+            } else foldedInSim.add(origRaiser.position);
           }
         }
 
@@ -644,21 +683,34 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           for (const bot of state.players) {
             const posIdx = pfOrder.indexOf(bot.position as typeof pfOrder[number]);
             if (!bot.isActive || posIdx >= heroIdx) continue;
-            if (bot.position === state.actionCtx.raisedByPosition) continue; // already handled in B
+            if (bot.position === state.actionCtx.raisedByPosition) continue;
             if (bot.currentBet > 0) {
-              const resp = simulateBotAction(bot.type, bot.position, true, raiseBB, preflopPot);
-              if (resp !== 'fold') preflopPot += Math.max(0, raiseBB - bot.currentBet);
-              else foldedInSim.add(bot.position);
+              const resp = state.trainingMode === 'gto'
+                ? simulateBotGTOAction(bot.cards, bot.position, true, raiseBB, preflopPot)
+                : simulateBotAction(bot.type, bot.position, true, raiseBB, preflopPot);
+              if (resp !== 'fold') {
+                const extra = Math.max(0, raiseBB - bot.currentBet);
+                preflopPot += extra;
+                extraCommits.set(bot.position, (extraCommits.get(bot.position) ?? 0) + extra);
+              } else foldedInSim.add(bot.position);
             }
           }
         }
       }
 
+      // Apply post-hero preflop stack deductions
+      const postPreflopPlayers = state.players.map(p => ({
+        ...p,
+        stack: Math.round(Math.max(0, p.stack - (extraCommits.get(p.position) ?? 0)) * 10) / 10,
+      }));
+
       const analysis = buildPreflopAnalysis(state.heroCards, state.heroPosition, heroAction, raiseBB, state.actionCtx, state.mainVillainType);
 
       if (heroAction === 'fold') {
         return {
-          ...state, phase: 'showdown', heroBet, pot: preflopPot,
+          ...state, players: postPreflopPlayers,
+          phase: 'showdown', heroBet, pot: preflopPot,
+          heroStack: Math.round(Math.max(0, state.heroStack - heroBet) * 10) / 10,
           analysis, showAnalysis: true, lastHeroAction: heroAction,
           heroIsAggressor: false, showdownResult: 'villain', villainFolded: false,
           heroTotalInvestedBB: heroAlreadyIn,
@@ -666,10 +718,12 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       }
 
       // ── Everyone folded — hero wins uncontested ────────────────────────
-      const stillActiveBots = state.players.filter(p => p.isActive && !foldedInSim.has(p.position));
+      const stillActiveBots = postPreflopPlayers.filter(p => p.isActive && !foldedInSim.has(p.position));
       if (stillActiveBots.length === 0) {
         return {
-          ...state, phase: 'showdown', heroBet, pot: preflopPot,
+          ...state, players: postPreflopPlayers,
+          phase: 'showdown', heroBet, pot: preflopPot,
+          heroStack: Math.round(Math.max(0, state.heroStack - heroBet) * 10) / 10,
           analysis, showAnalysis: true, lastHeroAction: heroAction,
           heroIsAggressor: heroAction === 'raise',
           showdownResult: 'hero', villainFolded: true,
@@ -682,8 +736,9 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       if (state.trainingMode === 'preflop') {
         return {
           ...state,
-          players: state.players.map(p => ({ ...p, action: null })),
+          players: postPreflopPlayers.map(p => ({ ...p, action: null })),
           phase: 'showdown', heroBet, pot: preflopPot,
+          heroStack: Math.round(Math.max(0, state.heroStack - heroBet) * 10) / 10,
           analysis, showAnalysis: true, lastHeroAction: heroAction,
           heroIsAggressor: heroAction === 'raise',
           showdownResult: null, villainFolded: false,
@@ -710,11 +765,11 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           );
 
       // Simulate all other active players' flop reactions to villain's opening bet
-      const survivedPositions: Position[] = state.players
+      const survivedPositions: Position[] = postPreflopPlayers
         .filter(p => p.isActive && !foldedInSim.has(p.position))
         .map(p => p.position as Position);
       const bgPositions = survivedPositions.filter(p => p !== state.mainVillainPosition);
-      const bgFlop = simulateOtherPlayers(bgPositions, state.players, villain, preflopPot);
+      const bgFlop = simulateOtherPlayers(bgPositions, postPreflopPlayers, villain, preflopPot);
       const flopPot = preflopPot + (villain?.betBB ?? 0) + bgFlop.potAdded;
 
       const flopHandActive: Position[] = [
@@ -726,10 +781,12 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         ...(villain ? { [state.mainVillainPosition]: { action: villain.action, betBB: villain.betBB } } : {}),
       };
 
+      const flopPlayers = applyStackDeductions(postPreflopPlayers, flopStreetActions);
       return {
         ...state,
-        players: state.players.map(p => ({ ...p, action: null })),
+        players: flopPlayers.map(p => ({ ...p, action: null })),
         phase: 'flop', heroBet, pot: flopPot,
+        heroStack: Math.round(Math.max(0, state.heroStack - heroBet) * 10) / 10,
         communityCards: flopCards, analysis, postFlopAnalysis: null,
         showAnalysis: true, lastHeroAction: heroAction,
         heroIsAggressor, villainPostFlopAction: villain, heroActsFirst,
@@ -769,18 +826,20 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           // Simulate other active players' response to villain's bet
           const bgPosA = state.handActivePlayers.filter(p => p !== (state.mainVillainPosition as Position));
           const bgRespA = simulateOtherPlayers(bgPosA, state.players, villainResp, state.pot);
+          const streetActsA: Partial<Record<Position, { action: VillainActionType; betBB: number }>> = {
+            ...bgRespA.actions,
+            [state.mainVillainPosition]: { action: villainResp.action, betBB: villainResp.betBB },
+          };
           return {
             ...state,
+            players: applyStackDeductions(state.players, streetActsA),
             pot: state.pot + villainResp.betBB + bgRespA.potAdded,
             villainPostFlopAction: villainResp,
             heroCheckedStreet: street,
             lastHeroAction: 'check',
             showAnalysis: false,
             handActivePlayers: [state.mainVillainPosition as Position, ...bgRespA.remainingActive],
-            playerStreetActions: {
-              ...bgRespA.actions,
-              [state.mainVillainPosition]: { action: villainResp.action, betBB: villainResp.betBB },
-            },
+            playerStreetActions: streetActsA,
           };
         }
 
@@ -852,6 +911,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         if (heroAction === 'fold') {
           return {
             ...state, phase: 'showdown', pot: newPotB,
+            heroStack: Math.round(Math.max(0, state.heroStack - heroAddedB) * 10) / 10,
             postFlopAnalysis: pfaB, postFlopAnalysisHistory: newHistB,
             villainPostFlopAction: villainBet, showAnalysis: true,
             postFlopStreetsDone: newDoneB,
@@ -865,6 +925,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         if (vFoldedB) {
           return {
             ...state, phase: 'showdown', pot: newPotB,
+            heroStack: Math.round(Math.max(0, state.heroStack - heroAddedB) * 10) / 10,
             postFlopAnalysis: pfaB, postFlopAnalysisHistory: newHistB,
             showAnalysis: true, postFlopStreetsDone: newDoneB,
             showdownResult: 'hero', villainFolded: true,
@@ -876,6 +937,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 
         return {
           ...state, pot: newPotB,
+          heroStack: Math.round(Math.max(0, state.heroStack - heroAddedB) * 10) / 10,
           postFlopAnalysis: pfaB, postFlopAnalysisHistory: newHistB,
           villainPostFlopAction: vFinalB, showAnalysis: true,
           postFlopStreetsDone: newDoneB,
@@ -969,6 +1031,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       if (heroAction === 'fold') {
         return {
           ...state, phase: 'showdown', pot: newPot,
+          heroStack: Math.round(Math.max(0, state.heroStack - heroAdded) * 10) / 10,
           postFlopAnalysis: pfa, postFlopAnalysisHistory: newHistory,
           villainPostFlopAction: villainOpenAction,
           showAnalysis: true,
@@ -983,6 +1046,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         // Hero's bet forced villain out — hero wins the pot
         return {
           ...state, phase: 'showdown', pot: newPot,
+          heroStack: Math.round(Math.max(0, state.heroStack - heroAdded) * 10) / 10,
           postFlopAnalysis: pfa, postFlopAnalysisHistory: newHistory,
           villainPostFlopAction: villainFinalResponse,
           showAnalysis: true,
@@ -995,6 +1059,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 
       return {
         ...state, pot: newPot,
+        heroStack: Math.round(Math.max(0, state.heroStack - heroAdded) * 10) / 10,
         postFlopAnalysis: pfa, postFlopAnalysisHistory: newHistory,
         villainPostFlopAction: villainFinalResponse,
         showAnalysis: true,
@@ -1039,8 +1104,9 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           ...bgTurn.actions,
           ...(villain ? { [state.mainVillainPosition]: { action: villain.action, betBB: villain.betBB } } : {}),
         };
+        const turnPlayers = applyStackDeductions(clearedPlayers, turnStreetActions);
         return {
-          ...state, players: clearedPlayers, phase: 'turn',
+          ...state, players: turnPlayers, phase: 'turn',
           communityCards: turnCards, postFlopAnalysis: null,
           showAnalysis: false, villainPostFlopAction: villain,
           pot: state.pot + (villain?.betBB ?? 0) + bgTurn.potAdded,
@@ -1069,8 +1135,9 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           ...bgRiver.actions,
           ...(villain ? { [state.mainVillainPosition]: { action: villain.action, betBB: villain.betBB } } : {}),
         };
+        const riverPlayers = applyStackDeductions(clearedPlayers, riverStreetActions);
         return {
-          ...state, players: clearedPlayers, phase: 'river',
+          ...state, players: riverPlayers, phase: 'river',
           communityCards: riverCards, postFlopAnalysis: null,
           showAnalysis: false, villainPostFlopAction: villain,
           pot: state.pot + (villain?.betBB ?? 0) + bgRiver.potAdded,
@@ -1104,6 +1171,133 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       return state;
     }
 
+    case 'GO_IDLE':
+      return { ...state, phase: 'idle' };
+
+    case 'START_CUSTOM_HAND': {
+      const cfg = action.config;
+      const heroPosition = cfg.heroPosition ?? POSITIONS[state.handNumber % POSITIONS.length];
+      const heroBlind = heroPosition === 'BB' ? 1 : heroPosition === 'SB' ? 0.5 : 0;
+
+      let workDeck = shuffleDeck(createDeck());
+
+      // Remove all specified cards up-front to prevent duplicates
+      const specsToRemove = [
+        cfg.heroCard1, cfg.heroCard2, ...cfg.communityCards,
+      ].filter(Boolean) as { rank: string; suit: string }[];
+      for (const spec of specsToRemove) {
+        const idx = workDeck.findIndex(c => c.rank === spec.rank && c.suit === spec.suit);
+        if (idx !== -1) workDeck.splice(idx, 1);
+      }
+
+      // Hero cards
+      const heroCards: Card[] = [];
+      if (cfg.heroCard1) {
+        heroCards.push({ rank: cfg.heroCard1.rank as Rank, suit: cfg.heroCard1.suit as Suit, faceUp: true });
+      } else {
+        const [h, r] = dealCards(workDeck, 1); heroCards.push(h[0]); workDeck = r;
+      }
+      if (cfg.heroCard2) {
+        heroCards.push({ rank: cfg.heroCard2.rank as Rank, suit: cfg.heroCard2.suit as Suit, faceUp: true });
+      } else {
+        const [h, r] = dealCards(workDeck, 1); heroCards.push(h[0]); workDeck = r;
+      }
+
+      // Opponent type (random cycles through 5 unique types)
+      const UNIQUE_TYPES: PlayerType[] = ['TAG', 'LAG', 'Nit', 'Fish', 'Maniac'];
+      const oppType = cfg.opponentType ?? UNIQUE_TYPES[state.handNumber % UNIQUE_TYPES.length];
+
+      // Bot players (all same type as configured)
+      const otherPositions = POSITIONS.filter(p => p !== heroPosition);
+      const botPlayers: BotPlayer[] = [];
+      for (let i = 0; i < Math.min(5, otherPositions.length); i++) {
+        const [bc, r] = dealCards(workDeck, 2); workDeck = r;
+        botPlayers.push({
+          id: i, name: PLAYER_NAMES[i % PLAYER_NAMES.length],
+          type: oppType, position: otherPositions[i],
+          cards: bc.map(c => ({ ...c, faceUp: false })),
+          stack: otherPositions[i] === 'BB' ? 99 : otherPositions[i] === 'SB' ? 99.5 : 100,
+          currentBet: 0, action: null, isActive: true,
+          isDealer: otherPositions[i] === 'BTN',
+        });
+      }
+
+      // Community cards (specified or drawn from remaining deck)
+      const allComm: Card[] = [];
+      for (let i = 0; i < 5; i++) {
+        const spec = cfg.communityCards[i];
+        if (spec) {
+          allComm.push({ rank: spec.rank as Rank, suit: spec.suit as Suit, faceUp: false });
+        } else {
+          const [dc, r] = dealCards(workDeck, 1); allComm.push({ ...dc[0], faceUp: false }); workDeck = r;
+        }
+      }
+
+      const sig = flopSig(allComm);
+      const newRecentSigs = [...state.recentBoardSigs.slice(-(BOARD_SIG_WINDOW - 1)), sig];
+
+      if (cfg.startStreet === 'preflop') {
+        const { players: updatedPlayers, actionCtx, pot } = simulateBotPreflop(botPlayers, heroPosition, false);
+        const mainVillain = getMainVillain(updatedPlayers);
+        return {
+          ...state,
+          phase: 'preflop', deck: workDeck, heroCards,
+          communityCards: allComm,
+          heroPosition, heroStack: 100 - heroBlind, heroBet: 0, pot,
+          currentBet: actionCtx.facingRaise ? actionCtx.raiseAmount : 0,
+          players: updatedPlayers, handNumber: state.handNumber + 1,
+          actionCtx, analysis: null, postFlopAnalysis: null,
+          postFlopAnalysisHistory: [], showAnalysis: false,
+          lastHeroAction: null, heroIsAggressor: false, villainPostFlopAction: null,
+          mainVillainType: mainVillain.type, mainVillainPosition: mainVillain.position,
+          heroActsFirst: false, postFlopStreetsDone: [],
+          recentBoardSigs: newRecentSigs,
+          showdownResult: null, villainFolded: false,
+          heroCheckedStreet: null, heroTotalInvestedBB: heroBlind,
+          handActivePlayers: [], playerStreetActions: {},
+        };
+      }
+
+      // Post-flop custom start: reveal board cards, skip preflop
+      const CARD_COUNTS: Record<string, number> = { flop: 3, turn: 4, river: 5 };
+      const DEFAULT_POTS: Record<string, number> = { flop: 6.5, turn: 15, river: 30 };
+      const APPROX_STACKS: Record<string, number> = { flop: 97, turn: 90, river: 75 };
+      const visCount = CARD_COUNTS[cfg.startStreet] ?? 3;
+      const startPot = DEFAULT_POTS[cfg.startStreet] ?? 6.5;
+      const heroStack = APPROX_STACKS[cfg.startStreet] ?? 97;
+      const revealedComm = allComm.map((c, i) => ({ ...c, faceUp: i < visCount }));
+
+      const mainVillain = getMainVillain(botPlayers);
+      const POSTFLOP_ORDER: Position[] = ['SB', 'BB', 'UTG', 'HJ', 'CO', 'BTN'];
+      const heroActsFirst = POSTFLOP_ORDER.indexOf(heroPosition) < POSTFLOP_ORDER.indexOf(mainVillain.position);
+      const visBoard = revealedComm.filter(c => c.faceUp);
+      const villain = heroActsFirst
+        ? null
+        : simulateVillainPostFlop(mainVillain.type, analyzeBoardTexture(visBoard).texture, startPot, 'none', mainVillain.cards, visBoard);
+      const finalPot = startPot + (villain?.betBB ?? 0);
+      const streetActions: Partial<Record<Position, { action: VillainActionType; betBB: number }>> = villain
+        ? { [mainVillain.position]: { action: villain.action, betBB: villain.betBB } }
+        : {};
+
+      return {
+        ...state,
+        phase: cfg.startStreet as GamePhase, deck: workDeck, heroCards, communityCards: revealedComm,
+        heroPosition, heroStack, heroBet: 0, pot: finalPot, currentBet: 0,
+        players: botPlayers, handNumber: state.handNumber + 1,
+        actionCtx: { facingRaise: false, raiseAmount: 0, potSize: finalPot, calledByCount: 0, raisedByPosition: null },
+        analysis: null, postFlopAnalysis: null, postFlopAnalysisHistory: [],
+        showAnalysis: false, lastHeroAction: null, heroIsAggressor: false,
+        villainPostFlopAction: villain,
+        mainVillainType: mainVillain.type, mainVillainPosition: mainVillain.position,
+        heroActsFirst, postFlopStreetsDone: [],
+        recentBoardSigs: newRecentSigs,
+        showdownResult: null, villainFolded: false, heroCheckedStreet: null,
+        heroTotalInvestedBB: heroBlind + 3.25,
+        handActivePlayers: botPlayers.map(p => p.position as Position),
+        playerStreetActions: streetActions,
+      };
+    }
+
     case 'DISMISS_ANALYSIS':
       return { ...state, showAnalysis: false };
 
@@ -1123,8 +1317,10 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 interface GameContextType {
   state: GameState;
   setDifficulty: (d: Difficulty) => void;
-  setTrainingMode: (mode: 'full' | 'preflop') => void;
+  setTrainingMode: (mode: 'full' | 'preflop' | 'gto' | 'custom') => void;
   startNewHand: () => void;
+  startCustomHand: (config: CustomHandConfig) => void;
+  goIdle: () => void;
   heroAct: (action: HeroAction, raiseBB?: number) => void;
   heroPostFlopAct: (action: PostFlopHeroAction, betPct?: number) => void;
   advancePhase: () => void;
@@ -1137,8 +1333,10 @@ const GameContext = createContext<GameContextType | null>(null);
 export function GameProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(gameReducer, buildInitialState());
   const setDifficulty = useCallback((d: Difficulty) => dispatch({ type: 'SET_DIFFICULTY', difficulty: d }), []);
-  const setTrainingMode = useCallback((mode: 'full' | 'preflop') => dispatch({ type: 'SET_TRAINING_MODE', mode }), []);
+  const setTrainingMode = useCallback((mode: 'full' | 'preflop' | 'gto' | 'custom') => dispatch({ type: 'SET_TRAINING_MODE', mode }), []);
   const startNewHand = useCallback(() => dispatch({ type: 'START_HAND' }), []);
+  const startCustomHand = useCallback((config: CustomHandConfig) => dispatch({ type: 'START_CUSTOM_HAND', config }), []);
+  const goIdle = useCallback(() => dispatch({ type: 'GO_IDLE' }), []);
   const heroAct = useCallback((a: HeroAction, raiseBB?: number) => dispatch({ type: 'HERO_ACT', action: a, raiseBB }), []);
   const heroPostFlopAct = useCallback((a: PostFlopHeroAction, betPct?: number) => dispatch({ type: 'HERO_POSTFLOP_ACT', action: a, betPct }), []);
   const advancePhase = useCallback(() => dispatch({ type: 'ADVANCE_PHASE' }), []);
@@ -1146,7 +1344,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const dismissAnalysis = useCallback(() => dispatch({ type: 'DISMISS_ANALYSIS' }), []);
 
   return (
-    <GameContext.Provider value={{ state, setDifficulty, setTrainingMode, startNewHand, heroAct, heroPostFlopAct, advancePhase, foldToVillainBet, dismissAnalysis }}>
+    <GameContext.Provider value={{ state, setDifficulty, setTrainingMode, startNewHand, startCustomHand, goIdle, heroAct, heroPostFlopAct, advancePhase, foldToVillainBet, dismissAnalysis }}>
       {children}
     </GameContext.Provider>
   );

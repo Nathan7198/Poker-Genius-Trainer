@@ -13,6 +13,7 @@ import PokerTable from '@/components/PokerTable';
 import ActionPanel from '@/components/ActionPanel';
 import CoachModal from '@/components/CoachModal';
 import HandReportModal from '@/components/HandReportModal';
+import CustomSetup from '@/components/CustomSetup';
 import {
   DIFFICULTIES, DIFFICULTY_DESCRIPTIONS, getHandNotation,
   evaluateMadeHand, MADE_HAND_COLORS,
@@ -27,13 +28,18 @@ function cardLabel(rank: string, suit: string) {
 }
 
 export default function PlayScreen() {
-  const { state, startNewHand, setDifficulty, setTrainingMode } = useGame();
+  const { state, startNewHand, setDifficulty, setTrainingMode, goIdle } = useGame();
   const { logHandHistory, recordHandResult } = useStats();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const [showDifficultyPicker, setShowDifficultyPicker] = React.useState(false);
+  const [showModePicker, setShowModePicker] = React.useState(false);
   const [showHandReport, setShowHandReport] = React.useState(false);
   const isPreflopMode = state.trainingMode === 'preflop';
+  const modeBtnRef = React.useRef<View>(null);
+  const [modeBtnY, setModeBtnY] = React.useState(0);
+  const [modeBtnX, setModeBtnX] = React.useState(0);
+  const [modeBtnH, setModeBtnH] = React.useState(0);
 
   const lastLoggedHand = React.useRef<number>(-1);
 
@@ -105,8 +111,8 @@ export default function PlayScreen() {
 
     logHandHistory(entry);
 
-    // Skip win/loss tracking for preflop-only drills (no cards played out)
-    if (state.trainingMode === 'full') {
+    // Skip win/loss tracking for preflop-only drills and GTO mode
+    if (state.trainingMode === 'full' || state.trainingMode === 'custom') {
       const won = state.showdownResult === 'hero';
       const profitBB = won
         ? Math.round((state.pot - state.heroTotalInvestedBB) * 100) / 100
@@ -180,24 +186,66 @@ export default function PlayScreen() {
               <Text style={[styles.streetBadgeText, { color: colors.gold }]}>{streetBadge}</Text>
             </View>
           )}
-          <TouchableOpacity
-            style={[styles.modeBtn, isPreflopMode && { backgroundColor: '#A8882A30', borderColor: '#A8882A80' }]}
-            onPress={() => setTrainingMode(isPreflopMode ? 'full' : 'preflop')}
+          <View
+            ref={modeBtnRef}
+            onLayout={() => {
+              modeBtnRef.current?.measure((_x, _y, width, height, pageX, pageY) => {
+                setModeBtnX(pageX);
+                setModeBtnY(pageY);
+                setModeBtnH(height);
+              });
+            }}
           >
-            <Text style={[styles.modeBtnText, { color: isPreflopMode ? colors.goldLight : colors.mutedForeground }]}>
-              {isPreflopMode ? 'PRE' : 'ALL'}
-            </Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.modeBtn, { borderColor: '#33333366' }]}
+              onPress={() => { setShowModePicker(!showModePicker); setShowDifficultyPicker(false); }}
+            >
+              <Text style={styles.modeBtnLabel}>MODE</Text>
+              <Text style={[styles.modeBtnText, {
+                color: state.trainingMode === 'gto' ? '#27AE60'
+                  : state.trainingMode === 'custom' ? '#3498DB'
+                  : isPreflopMode ? colors.goldLight
+                  : colors.foreground,
+              }]}>
+                {state.trainingMode === 'gto' ? 'GTO'
+                  : state.trainingMode === 'custom' ? 'Custom'
+                  : isPreflopMode ? 'Pre Flop'
+                  : 'Full Hands'}
+              </Text>
+            </TouchableOpacity>
+          </View>
           <TouchableOpacity
             style={[styles.diffBtn, { backgroundColor: diffColors[state.difficulty] + '22', borderColor: diffColors[state.difficulty] + '66' }]}
-            onPress={() => setShowDifficultyPicker(!showDifficultyPicker)}
+            onPress={() => { setShowDifficultyPicker(!showDifficultyPicker); setShowModePicker(false); }}
           >
+            <Text style={styles.diffBtnLabel}>DIFFICULTY</Text>
             <Text style={[styles.diffBtnText, { color: diffColors[state.difficulty] }]}>
-              {state.difficulty.slice(0, 3).toUpperCase()}
+              {state.difficulty}
             </Text>
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Mode picker — rendered outside header so touches aren't clipped */}
+      {showModePicker && (
+        <View style={[styles.modePicker, { backgroundColor: colors.card, borderColor: colors.border, top: modeBtnY + modeBtnH + 4, left: modeBtnX }]}>
+          {([['full', 'Full Hands'], ['preflop', 'Pre Flop'], ['gto', 'GTO Mode'], ['custom', 'Custom']] as const).map(([val, label]) => {
+            const isSelected = state.trainingMode === val;
+            return (
+              <TouchableOpacity
+                key={val}
+                style={[styles.modeOption, isSelected && { backgroundColor: '#A8882A18' }]}
+                onPress={() => { setTrainingMode(val); setShowModePicker(false); }}
+              >
+                <View style={styles.modeOptionRow}>
+                  <Feather name="check" size={13} color={isSelected ? colors.goldLight : 'transparent'} style={{ marginRight: 6 }} />
+                  <Text style={[styles.modeOptionText, { color: isSelected ? colors.goldLight : colors.foreground }]}>{label}</Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      )}
 
       {/* Difficulty picker */}
       {showDifficultyPicker && (
@@ -209,8 +257,8 @@ export default function PlayScreen() {
               onPress={() => handleDifficulty(d)}
             >
               <View style={styles.diffOptionRow}>
+                <Feather name="check" size={13} color={state.difficulty === d ? diffColors[d] : 'transparent'} style={{ marginRight: 6 }} />
                 <Text style={[styles.diffOptionName, { color: state.difficulty === d ? diffColors[d] : colors.foreground }]}>{d}</Text>
-                {state.difficulty === d && <Feather name="check" size={14} color={diffColors[d]} />}
               </View>
               <Text style={[styles.diffOptionDesc, { color: colors.mutedForeground }]}>{DIFFICULTY_DESCRIPTIONS[d]}</Text>
             </TouchableOpacity>
@@ -268,14 +316,18 @@ export default function PlayScreen() {
 
         {/* Idle */}
         {isIdle && (
-          <View style={styles.centerActions}>
-            <TouchableOpacity style={[styles.dealBtn, { backgroundColor: colors.gold }]} onPress={handleNewHand}>
-              <Text style={[styles.dealBtnText, { color: '#0A0A0A' }]}>DEAL CARDS</Text>
-            </TouchableOpacity>
-            <Text style={[styles.idleSubtext, { color: colors.mutedForeground }]}>
-              Hero always at bottom · Boards never repeat · Full street coaching
-            </Text>
-          </View>
+          state.trainingMode === 'custom' ? (
+            <CustomSetup />
+          ) : (
+            <View style={styles.centerActions}>
+              <TouchableOpacity style={[styles.dealBtn, { backgroundColor: colors.gold }]} onPress={handleNewHand}>
+                <Text style={[styles.dealBtnText, { color: '#0A0A0A' }]}>DEAL CARDS</Text>
+              </TouchableOpacity>
+              <Text style={[styles.idleSubtext, { color: colors.mutedForeground }]}>
+                Hero always at bottom · Boards never repeat · Full street coaching
+              </Text>
+            </View>
+          )
         )}
 
       </ScrollView>
@@ -347,10 +399,12 @@ export default function PlayScreen() {
             )}
             <TouchableOpacity
               style={[styles.nextHandFixed, { backgroundColor: colors.gold, flex: 1 }]}
-              onPress={handleNewHand}
+              onPress={state.trainingMode === 'custom' ? goIdle : handleNewHand}
               activeOpacity={0.85}
             >
-              <Text style={styles.nextHandFixedText}>NEXT HAND →</Text>
+              <Text style={styles.nextHandFixedText}>
+                {state.trainingMode === 'custom' ? 'CONFIGURE HAND ↺' : 'NEXT HAND →'}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -375,10 +429,16 @@ const styles = StyleSheet.create({
   streetBadgeText: { fontSize: 10, fontWeight: '800', letterSpacing: 1 },
   potBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1 },
   potText: { fontSize: 10, fontWeight: '700' },
-  modeBtn: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1, borderColor: '#333', backgroundColor: '#181818' },
-  modeBtnText: { fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
-  diffBtn: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1 },
-  diffBtnText: { fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
+  modeBtn: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1, backgroundColor: '#181818', alignItems: 'center', minWidth: 90 },
+  modeBtnLabel: { fontSize: 8, fontWeight: '700', letterSpacing: 1.5, color: '#888', marginBottom: 1 },
+  modeBtnText: { fontSize: 12, fontWeight: '800', letterSpacing: 0.3 },
+  modePicker: { position: 'absolute', zIndex: 100, borderRadius: 10, borderWidth: 1, paddingVertical: 4, minWidth: 130, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 8 },
+  modeOption: { paddingHorizontal: 12, paddingVertical: 10, borderRadius: 6 },
+  modeOptionRow: { flexDirection: 'row', alignItems: 'center' },
+  modeOptionText: { fontSize: 13, fontWeight: '700' },
+  diffBtn: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1, alignItems: 'center', minWidth: 90 },
+  diffBtnLabel: { fontSize: 8, fontWeight: '700', letterSpacing: 1.5, color: '#888', marginBottom: 1 },
+  diffBtnText: { fontSize: 12, fontWeight: '800', letterSpacing: 0.3 },
   diffPicker: {
     position: 'absolute', right: 12, top: 62, zIndex: 100,
     borderRadius: 12, borderWidth: 1, width: 280,
