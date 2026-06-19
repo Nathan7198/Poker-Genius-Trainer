@@ -751,34 +751,45 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       const heroIsAggressor = heroAction === 'raise';
 
       const POSTFLOP_ORDER: Position[] = ['SB','BB','UTG','HJ','CO','BTN'];
-      const heroActsFirst = POSTFLOP_ORDER.indexOf(state.heroPosition) < POSTFLOP_ORDER.indexOf(state.mainVillainPosition);
 
-      const villainPlayer = getMainVillainPlayer(state);
+      // All bots still alive entering the flop
+      const survivedPositions: Position[] = postPreflopPlayers
+        .filter(p => p.isActive && !foldedInSim.has(p.position))
+        .map(p => p.position as Position);
+
+      // Hero acts first only when NO active bot has an earlier post-flop position than hero.
+      // The "flop villain" is the earliest active bot — they open the street if before hero,
+      // or respond to hero if no bot is before hero.
+      const heroIdx = POSTFLOP_ORDER.indexOf(state.heroPosition);
+      const firstBotBeforeHero = survivedPositions
+        .filter(p => POSTFLOP_ORDER.indexOf(p) < heroIdx)
+        .sort((a, b) => POSTFLOP_ORDER.indexOf(a) - POSTFLOP_ORDER.indexOf(b))[0];
+      const heroActsFirst = !firstBotBeforeHero;
+      const flopVillainPos: Position = firstBotBeforeHero ?? state.mainVillainPosition;
+      const flopVillainPlayer = postPreflopPlayers.find(p => p.position === flopVillainPos)
+        ?? getMainVillainPlayer(state);
+
       const visibleBoard = flopCards.filter(c => c.faceUp);
       const villain = heroActsFirst
         ? null
         : simulateVillainPostFlop(
-            state.mainVillainType,
+            flopVillainPlayer.type,
             analyzeBoardTexture(visibleBoard).texture,
             preflopPot, 'none',
-            villainPlayer.cards, visibleBoard,
+            flopVillainPlayer.cards, visibleBoard,
           );
 
-      // Simulate all other active players' flop reactions to villain's opening bet
-      const survivedPositions: Position[] = postPreflopPlayers
-        .filter(p => p.isActive && !foldedInSim.has(p.position))
-        .map(p => p.position as Position);
-      const bgPositions = survivedPositions.filter(p => p !== state.mainVillainPosition);
+      const bgPositions = survivedPositions.filter(p => p !== flopVillainPos);
       const bgFlop = simulateOtherPlayers(bgPositions, postPreflopPlayers, villain, preflopPot);
       const flopPot = preflopPot + (villain?.betBB ?? 0) + bgFlop.potAdded;
 
       const flopHandActive: Position[] = [
-        ...(villain?.action !== 'fold' ? [state.mainVillainPosition as Position] : []),
+        ...(villain?.action !== 'fold' ? [flopVillainPos] : []),
         ...bgFlop.remainingActive,
       ];
       const flopStreetActions: Partial<Record<Position, { action: VillainActionType; betBB: number }>> = {
         ...bgFlop.actions,
-        ...(villain ? { [state.mainVillainPosition]: { action: villain.action, betBB: villain.betBB } } : {}),
+        ...(villain ? { [flopVillainPos]: { action: villain.action, betBB: villain.betBB } } : {}),
       };
 
       const flopPlayers = applyStackDeductions(postPreflopPlayers, flopStreetActions);
@@ -795,6 +806,8 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         heroTotalInvestedBB: heroAlreadyIn + heroBet,
         handActivePlayers: flopHandActive,
         playerStreetActions: flopStreetActions,
+        mainVillainPosition: flopVillainPos,
+        mainVillainType: flopVillainPlayer.type,
       };
     }
 
@@ -1088,21 +1101,29 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       if (state.phase === 'flop') {
         const turnCards = revealCommunityCards(state.communityCards, 1);
         const board = turnCards.filter(c => c.faceUp);
-        const villain = state.heroActsFirst
+        const pfOrder: Position[] = ['SB','BB','UTG','HJ','CO','BTN'];
+        const heroIdxT = pfOrder.indexOf(state.heroPosition);
+        const firstBotBeforeHeroT = state.handActivePlayers
+          .filter(p => pfOrder.indexOf(p) < heroIdxT)
+          .sort((a, b) => pfOrder.indexOf(a) - pfOrder.indexOf(b))[0];
+        const turnHeroActsFirst = !firstBotBeforeHeroT;
+        const turnVillainPos: Position = firstBotBeforeHeroT ?? state.mainVillainPosition;
+        const turnVillainPlayer = state.players.find(p => p.position === turnVillainPos) ?? villainPlayer;
+        const villain = turnHeroActsFirst
           ? null
           : simulateVillainPostFlop(
-              state.mainVillainType, analyzeBoardTexture(board).texture,
-              state.pot, 'none', villainCards, board,
+              turnVillainPlayer.type, analyzeBoardTexture(board).texture,
+              state.pot, 'none', turnVillainPlayer.cards, board,
             );
-        const bgPosTurn = state.handActivePlayers.filter(p => p !== (state.mainVillainPosition as Position));
+        const bgPosTurn = state.handActivePlayers.filter(p => p !== turnVillainPos);
         const bgTurn = simulateOtherPlayers(bgPosTurn, state.players, villain, state.pot);
         const turnHandActive: Position[] = [
-          ...(villain?.action !== 'fold' ? [state.mainVillainPosition as Position] : []),
+          ...(villain?.action !== 'fold' ? [turnVillainPos] : []),
           ...bgTurn.remainingActive,
         ];
         const turnStreetActions: Partial<Record<Position, { action: VillainActionType; betBB: number }>> = {
           ...bgTurn.actions,
-          ...(villain ? { [state.mainVillainPosition]: { action: villain.action, betBB: villain.betBB } } : {}),
+          ...(villain ? { [turnVillainPos]: { action: villain.action, betBB: villain.betBB } } : {}),
         };
         const turnPlayers = applyStackDeductions(clearedPlayers, turnStreetActions);
         return {
@@ -1113,27 +1134,38 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           heroCheckedStreet: null,
           handActivePlayers: turnHandActive,
           playerStreetActions: turnStreetActions,
+          heroActsFirst: turnHeroActsFirst,
+          mainVillainPosition: turnVillainPos,
+          mainVillainType: turnVillainPlayer.type,
         };
       }
 
       if (state.phase === 'turn') {
         const riverCards = state.communityCards.map(c => ({ ...c, faceUp: true }));
         const board = riverCards.filter(c => c.faceUp);
-        const villain = state.heroActsFirst
+        const pfOrder: Position[] = ['SB','BB','UTG','HJ','CO','BTN'];
+        const heroIdxR = pfOrder.indexOf(state.heroPosition);
+        const firstBotBeforeHeroR = state.handActivePlayers
+          .filter(p => pfOrder.indexOf(p) < heroIdxR)
+          .sort((a, b) => pfOrder.indexOf(a) - pfOrder.indexOf(b))[0];
+        const riverHeroActsFirst = !firstBotBeforeHeroR;
+        const riverVillainPos: Position = firstBotBeforeHeroR ?? state.mainVillainPosition;
+        const riverVillainPlayer = state.players.find(p => p.position === riverVillainPos) ?? villainPlayer;
+        const villain = riverHeroActsFirst
           ? null
           : simulateVillainPostFlop(
-              state.mainVillainType, analyzeBoardTexture(board).texture,
-              state.pot, 'none', villainCards, board,
+              riverVillainPlayer.type, analyzeBoardTexture(board).texture,
+              state.pot, 'none', riverVillainPlayer.cards, board,
             );
-        const bgPosRiver = state.handActivePlayers.filter(p => p !== (state.mainVillainPosition as Position));
+        const bgPosRiver = state.handActivePlayers.filter(p => p !== riverVillainPos);
         const bgRiver = simulateOtherPlayers(bgPosRiver, state.players, villain, state.pot);
         const riverHandActive: Position[] = [
-          ...(villain?.action !== 'fold' ? [state.mainVillainPosition as Position] : []),
+          ...(villain?.action !== 'fold' ? [riverVillainPos] : []),
           ...bgRiver.remainingActive,
         ];
         const riverStreetActions: Partial<Record<Position, { action: VillainActionType; betBB: number }>> = {
           ...bgRiver.actions,
-          ...(villain ? { [state.mainVillainPosition]: { action: villain.action, betBB: villain.betBB } } : {}),
+          ...(villain ? { [riverVillainPos]: { action: villain.action, betBB: villain.betBB } } : {}),
         };
         const riverPlayers = applyStackDeductions(clearedPlayers, riverStreetActions);
         return {
@@ -1144,18 +1176,26 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           heroCheckedStreet: null,
           handActivePlayers: riverHandActive,
           playerStreetActions: riverStreetActions,
+          heroActsFirst: riverHeroActsFirst,
+          mainVillainPosition: riverVillainPos,
+          mainVillainType: riverVillainPlayer.type,
         };
       }
 
       if (state.phase === 'river') {
-        // Reveal main villain's cards + evaluate the winner
         const board = state.communityCards.filter(c => c.faceUp);
+        // Use the active main villain; fall back to any active bot if they folded
+        const showdownVillain =
+          state.players.find(p => p.position === state.mainVillainPosition && p.isActive)
+          ?? state.players.find(p => (state.handActivePlayers as string[]).includes(p.position))
+          ?? villainPlayer;
+        // Only reveal the showdown villain's cards, not all active players
         const revealedPlayers = state.players.map(p =>
-          p.isActive
+          p.position === showdownVillain.position
             ? { ...p, cards: p.cards.map(c => ({ ...c, faceUp: true })) }
             : p
         );
-        const showdownResult = evaluateHandWinner(state.heroCards, villainPlayer.cards, board);
+        const showdownResult = evaluateHandWinner(state.heroCards, showdownVillain.cards, board);
         return {
           ...state,
           players: revealedPlayers,
@@ -1165,6 +1205,8 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           showdownResult,
           villainFolded: false,
           heroCheckedStreet: null,
+          mainVillainPosition: showdownVillain.position as Position,
+          mainVillainType: showdownVillain.type,
         };
       }
 
@@ -1267,16 +1309,23 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       const heroStack = APPROX_STACKS[cfg.startStreet] ?? 97;
       const revealedComm = allComm.map((c, i) => ({ ...c, faceUp: i < visCount }));
 
-      const mainVillain = getMainVillain(botPlayers);
-      const POSTFLOP_ORDER: Position[] = ['SB', 'BB', 'UTG', 'HJ', 'CO', 'BTN'];
-      const heroActsFirst = POSTFLOP_ORDER.indexOf(heroPosition) < POSTFLOP_ORDER.indexOf(mainVillain.position);
+      const POSTFLOP_ORDER_C: Position[] = ['SB', 'BB', 'UTG', 'HJ', 'CO', 'BTN'];
+      const heroIdxC = POSTFLOP_ORDER_C.indexOf(heroPosition);
+      const allBotPositions: Position[] = botPlayers.map(p => p.position as Position);
+      const firstBotBeforeHeroC = allBotPositions
+        .filter(p => POSTFLOP_ORDER_C.indexOf(p) < heroIdxC)
+        .sort((a, b) => POSTFLOP_ORDER_C.indexOf(a) - POSTFLOP_ORDER_C.indexOf(b))[0];
+      const heroActsFirst = !firstBotBeforeHeroC;
+      const customVillainPos: Position = firstBotBeforeHeroC
+        ?? getMainVillain(botPlayers).position;
+      const customVillainPlayer = botPlayers.find(p => p.position === customVillainPos) ?? botPlayers[0];
       const visBoard = revealedComm.filter(c => c.faceUp);
       const villain = heroActsFirst
         ? null
-        : simulateVillainPostFlop(mainVillain.type, analyzeBoardTexture(visBoard).texture, startPot, 'none', mainVillain.cards, visBoard);
+        : simulateVillainPostFlop(customVillainPlayer.type, analyzeBoardTexture(visBoard).texture, startPot, 'none', customVillainPlayer.cards, visBoard);
       const finalPot = startPot + (villain?.betBB ?? 0);
       const streetActions: Partial<Record<Position, { action: VillainActionType; betBB: number }>> = villain
-        ? { [mainVillain.position]: { action: villain.action, betBB: villain.betBB } }
+        ? { [customVillainPos]: { action: villain.action, betBB: villain.betBB } }
         : {};
 
       return {
@@ -1288,12 +1337,12 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         analysis: null, postFlopAnalysis: null, postFlopAnalysisHistory: [],
         showAnalysis: false, lastHeroAction: null, heroIsAggressor: false,
         villainPostFlopAction: villain,
-        mainVillainType: mainVillain.type, mainVillainPosition: mainVillain.position,
+        mainVillainType: customVillainPlayer.type, mainVillainPosition: customVillainPos,
         heroActsFirst, postFlopStreetsDone: [],
         recentBoardSigs: newRecentSigs,
         showdownResult: null, villainFolded: false, heroCheckedStreet: null,
         heroTotalInvestedBB: heroBlind + 3.25,
-        handActivePlayers: botPlayers.map(p => p.position as Position),
+        handActivePlayers: allBotPositions,
         playerStreetActions: streetActions,
       };
     }
