@@ -598,7 +598,11 @@ export function simulateVillainPostFlop(
 
     if (rand < freq) {
       const betPct =
-        playerType === 'Maniac' ? 90 + Math.floor(Math.random() * 40) :
+        playerType === 'Maniac' ? (
+          handRank >= 4 ? 115 + Math.floor(Math.random() * 40) : // monster: overbet 115-155%
+          handRank >= 2 ? 80  + Math.floor(Math.random() * 35) : // pair+:   large 80-115%
+                          45  + Math.floor(Math.random() * 40)   // air:     bluff 45-85%
+        ) :
         playerType === 'Fish'   ? 50 + Math.floor(Math.random() * 30) :
         playerType === 'Nit'    ? 55 + Math.floor(Math.random() * 20) :
         35 + Math.floor(Math.random() * 40);
@@ -641,7 +645,11 @@ export function simulateVillainPostFlop(
 
   if (heroAction === 'bet' && rand < foldProb + raiseProb) {
     const raisePct =
-      playerType === 'Maniac' ? 120 + Math.floor(Math.random() * 30) :
+      playerType === 'Maniac' ? (
+        handRank >= 4 ? 150 + Math.floor(Math.random() * 50) : // monster: massive 150-200%
+        handRank >= 2 ? 100 + Math.floor(Math.random() * 40) : // pair+:   big 100-140%
+                        65  + Math.floor(Math.random() * 55)   // air:     bluff-raise 65-120%
+      ) :
       playerType === 'LAG'    ? 90  + Math.floor(Math.random() * 30) :
       75 + Math.floor(Math.random() * 25);
     const raiseBB = Math.max(1, Math.round((raisePct / 100) * potBB * 10) / 10);
