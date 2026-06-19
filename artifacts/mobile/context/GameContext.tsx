@@ -896,21 +896,28 @@ function gameReducer(state: GameState, action: GameAction): GameState {
             state.mainVillainType, analyzeBoardTexture(board).texture,
             state.pot + betBB, 'raise', villainCards, board,
           );
+          // Cap villain's re-raise at their remaining stack
+          if (vFinalB.betBB > villainPlayer.stack) vFinalB = { ...vFinalB, betBB: villainPlayer.stack };
         } else {
           vFinalB = villainBet; // call — no further action
         }
 
         const vFoldedB = vFinalB.action === 'fold';
 
+        // Cap each side's contribution at their remaining stack
+        const heroBCallB = Math.min(villainBet.betBB, state.heroStack);
+        const villainCallB = Math.min(Math.max(0, betBB - villainAlrIn), villainPlayer.stack);
+        const heroCallBackB = Math.min(Math.max(0, vFinalB.betBB - betBB), Math.max(0, state.heroStack - betBB));
+
         let newPotB = state.pot;
         if (heroAction === 'call') {
-          newPotB += villainBet.betBB;
+          newPotB += heroBCallB;
         } else if (heroAction === 'bet' || heroAction === 'raise') {
           newPotB += betBB;
-          if (vFinalB.action === 'call')  newPotB += Math.max(0, betBB - villainAlrIn);
+          if (vFinalB.action === 'call')  newPotB += villainCallB;
           if (vFinalB.action === 'raise') {
             newPotB += Math.max(0, vFinalB.betBB - villainAlrIn);
-            newPotB += Math.max(0, vFinalB.betBB - betBB);
+            newPotB += heroCallBackB;
           }
         }
 
@@ -926,8 +933,8 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         const newHistB = [...state.postFlopAnalysisHistory, pfaB];
         const newDoneB = [...state.postFlopStreetsDone, street];
 
-        const heroAddedB = heroAction === 'call' ? villainBet.betBB
-          : (heroAction === 'bet' || heroAction === 'raise') ? betBB : 0;
+        const heroAddedB = heroAction === 'call' ? heroBCallB
+          : (heroAction === 'bet' || heroAction === 'raise') ? betBB + (vFinalB.action === 'raise' ? heroCallBackB : 0) : 0;
 
         if (heroAction === 'fold') {
           return {
@@ -1017,23 +1024,25 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       const callBB = state.villainPostFlopAction?.betBB ?? 0;
       // How many chips villain already committed this street (already in pot)
       const villainAlreadyIn = !state.heroActsFirst ? villainOpenAction.betBB : 0;
+
+      // Cap each side's contribution at their remaining stack
+      const heroCallMain   = Math.min(callBB, state.heroStack);
+      const villainCallMain = Math.min(Math.max(0, betBB - villainAlreadyIn), villainPlayer.stack);
+      const heroCallBack   = Math.min(Math.max(0, villainFinalResponse.betBB - betBB), Math.max(0, state.heroStack - betBB));
+
       let newPot = state.pot;
 
       if (heroAction === 'bet' || heroAction === 'raise') {
-        newPot += betBB; // hero's chips
+        newPot += betBB; // hero's chips (already capped at heroStack)
         if (villainFinalResponse.action === 'call') {
-          // Villain calls hero's total bet; they already put villainAlreadyIn in
-          newPot += Math.max(0, betBB - villainAlreadyIn);
+          newPot += villainCallMain;
         } else if (villainFinalResponse.action === 'raise') {
-          // Villain raises to a new total; subtract what they already have in
           newPot += Math.max(0, villainFinalResponse.betBB - villainAlreadyIn);
-          // Hero implicitly calls back up to villain's raise
-          newPot += Math.max(0, villainFinalResponse.betBB - betBB);
+          newPot += heroCallBack;
         }
         // fold: villain adds nothing
       } else if (heroAction === 'call') {
-        // Villain's bet is already in state.pot — only add hero's matching call
-        newPot += callBB;
+        newPot += heroCallMain;
       } else if (heroAction === 'check') {
         if (villainFinalResponse.betBB > 0) newPot += villainFinalResponse.betBB;
       }
@@ -1049,8 +1058,8 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 
       const newHistory = [...state.postFlopAnalysisHistory, pfa];
 
-      const heroAdded = heroAction === 'call' ? callBB
-        : (heroAction === 'bet' || heroAction === 'raise') ? betBB : 0;
+      const heroAdded = heroAction === 'call' ? heroCallMain
+        : (heroAction === 'bet' || heroAction === 'raise') ? betBB + (villainFinalResponse.action === 'raise' ? heroCallBack : 0) : 0;
 
       // ── End-of-hand transitions ─────────────────────────────────────────
       if (heroAction === 'fold') {
