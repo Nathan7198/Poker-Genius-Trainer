@@ -95,7 +95,9 @@ export default function PokerTable() {
   return (
     <View style={[styles.outer, { height: TABLE_H + SEAT_OVERFLOW + 90, paddingTop: SEAT_OVERFLOW, width: tableW }]}>
       {/* Table felt */}
-      <View style={[styles.felt, { width: tableW, height: TABLE_H, borderRadius: TABLE_H / 2 + 8 }]}>
+      <View style={[styles.felt, { width: tableW, height: TABLE_H, borderRadius: TABLE_H / 2 }]}>
+        {/* Outer border overlay — rendered as overlay so it doesn't shift absolute children */}
+        <View style={[styles.feltBorder, { borderRadius: TABLE_H / 2 + 8 }]} pointerEvents="none" />
         {/* Inner dashed border */}
         <View style={[styles.feltInner, { width: tableW - 40, height: TABLE_H - 40, borderRadius: TABLE_H / 2 }]} />
 
@@ -186,16 +188,23 @@ const styles = StyleSheet.create({
   },
   felt: {
     backgroundColor: '#163224',
-    borderWidth: 8,
-    borderColor: '#0A1E14',
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'visible',
+  },
+  feltBorder: {
+    position: 'absolute',
+    top: -8,
+    left: -8,
+    right: -8,
+    bottom: -8,
+    borderWidth: 8,
+    borderColor: '#0A1E14',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.7,
     shadowRadius: 16,
     elevation: 12,
-    overflow: 'visible',
   },
   feltInner: {
     position: 'absolute',
