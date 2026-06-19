@@ -30,9 +30,10 @@ export default function PokerTable() {
   const { state } = useGame();
   const { width, height } = useWindowDimensions();
 
-  // Clamp felt height: reserve top-bar(~52) + tab(~94) + worst-case panel(~290)
-  // + hero row(~90) + padding(~20) = 546. What's left is the felt oval.
-  const TABLE_H = Math.max(220, Math.min(340, height - 546));
+  // Reserve space for: top-bar(~52) + tab(~94) + panel + hero row(~90) + padding(~20).
+  // GTO mode panel is ~50px taller than worst-case non-GTO, so reserve more.
+  const panelReserve = state.trainingMode === 'gto' ? 596 : 546;
+  const TABLE_H = Math.max(200, Math.min(340, height - panelReserve));
   // CY/RY proportional to TABLE_H (original ratios: 155/340, 105/340)
   const CY = Math.round(TABLE_H * 0.456);
   const RY = Math.round(TABLE_H * 0.309);

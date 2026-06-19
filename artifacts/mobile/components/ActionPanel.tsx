@@ -9,6 +9,8 @@ import {
   calcPotOdds, getEquity, getHandNotation, getHandStrength, STRENGTH_COLORS,
   evaluateMadeHand, analyzeBoardTexture, getCbetRecommendation,
   MADE_HAND_COLORS, BOARD_TEXTURE_INFO,
+  GTO_POSITION_INFO, getPostFlopEquity, getPreflopGTOVerdict,
+  GTO_RANGES, BB_DEFENSE,
 } from '@/constants/pokerData';
 
 const RAISE_PRESETS = [2, 2.5, 3, 4, 5, 6, 8, 10, 12, 15, 20, 25];
@@ -36,14 +38,24 @@ export default function ActionPanel() {
 
   const { actionCtx, heroCards, heroPosition, difficulty, villainPostFlopAction, heroIsAggressor, heroActsFirst, heroCheckedStreet } = state;
   const board = state.communityCards.filter(c => c.faceUp);
+  const isGTOMode = state.trainingMode === 'gto';
 
   const notation = heroCards.length === 2 ? getHandNotation(heroCards[0], heroCards[1]) : '';
   const preflopEquity = notation ? getEquity(notation) : 50;
   const preflopStrength = notation ? getHandStrength(notation) : 'Weak';
   const heroAlreadyIn = heroPosition === 'BB' ? 1 : heroPosition === 'SB' ? 0.5 : 0;
   const potOdds = calcPotOdds(Math.max(0, actionCtx.raiseAmount - heroAlreadyIn), actionCtx.potSize);
-  const showInfo = difficulty === 'Beginner' || difficulty === 'Intermediate';
+  // Classic info row — shown at Beginner/Intermediate regardless of mode
+  const showInfo       = difficulty === 'Beginner' || difficulty === 'Intermediate';
   const showSuggestion = difficulty === 'Beginner';
+  // Advanced non-GTO: show pot odds only (no equity — user must estimate it)
+  const showPotOddsHint = difficulty === 'Advanced' && !isGTOMode;
+
+  // GTO panel visibility and detail level
+  const gtoShowPanel      = isGTOMode && difficulty !== 'Expert';
+  const gtoShowHandStatus = difficulty === 'Beginner' || difficulty === 'Intermediate';
+  const gtoShowActionRec  = difficulty === 'Beginner';
+  const gtoShowTip        = difficulty === 'Beginner' || difficulty === 'Intermediate';
 
   // Post-flop evaluations
   const madeHandResult = isPostFlop && heroCards.length === 2 && board.length >= 3
@@ -77,16 +89,59 @@ export default function ActionPanel() {
 
   const preflopGtoRec = (() => {
     if (!notation || !isPreflop) return null;
-    const { GTO_RANGES, BB_DEFENSE } = require('@/constants/pokerData');
     if (!actionCtx.facingRaise) return GTO_RANGES[heroPosition].has(notation) ? 'RAISE' : 'FOLD';
     if (heroPosition === 'BB') return BB_DEFENSE.has(notation) ? 'CALL/3BET' : 'FOLD';
     return preflopEquity >= potOdds ? 'CALL' : 'FOLD';
   })();
 
+  // ── GTO Coach data (computed once, used in both panels) ────────────────────
+  const gtoVerdict = isGTOMode && notation && isPreflop
+    ? getPreflopGTOVerdict(notation, heroPosition, actionCtx.facingRaise, potOdds, preflopEquity, false)
+    : null;
+  const posInfo = GTO_POSITION_INFO[heroPosition];
+
   // ── PREFLOP PANEL ──────────────────────────────────────────────────────────
   if (isPreflop) {
     return (
       <View style={[styles.container, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
+
+        {/* GTO Coach panel — detail level controlled by difficulty */}
+        {gtoShowPanel && notation && (
+          <View style={styles.gtoPanel}>
+            <Text style={styles.gtoPanelHeader}>GTO COACH  ·  PREFLOP</Text>
+            <View style={styles.gtoStatRow}>
+              <GTOStat label="POSITION" value={heroPosition} sub={`${posInfo.rangeSize}% range`} />
+              {gtoShowHandStatus && (
+                <GTOStat
+                  label="HAND STATUS"
+                  value={posInfo.rangeSize > 0 && GTO_RANGES[heroPosition].has(notation) ? 'In Range' : 'Out of Range'}
+                  color={posInfo.rangeSize > 0 && GTO_RANGES[heroPosition].has(notation) ? '#27AE60' : '#E74C3C'}
+                  sub={`vs ${posInfo.rangeSize}% open`}
+                />
+              )}
+              {actionCtx.facingRaise ? (
+                <GTOStat label="POT ODDS" value={`${potOdds}%`} sub="equity needed" color="#F39C12" />
+              ) : gtoShowHandStatus ? (
+                <GTOStat label="OPEN SIZE" value={heroPosition === 'BB' ? 'Defend' : `${posInfo.openSize}BB`} sub="GTO size" />
+              ) : null}
+              {gtoShowActionRec && (
+                <GTOStat
+                  label="ACTION"
+                  value={gtoVerdict?.action.toUpperCase() ?? '—'}
+                  color={gtoVerdict?.action === 'raise' ? '#27AE60' : gtoVerdict?.action === 'call' ? '#3498DB' : '#E74C3C'}
+                />
+              )}
+            </View>
+            {gtoShowTip && (
+              <View style={styles.gtoTipBox}>
+                <Text style={styles.gtoTipText} numberOfLines={3} ellipsizeMode="tail">
+                  {gtoVerdict ? gtoVerdict.reason : posInfo.positionTip}
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
+
         {showInfo && notation && (
           <View style={styles.infoRow}>
             <InfoCell label="HAND" value={notation} sub={preflopStrength} valueColor={STRENGTH_COLORS[preflopStrength]} />
@@ -106,6 +161,13 @@ export default function ActionPanel() {
                 valueColor={preflopGtoRec.includes('RAISE') || preflopGtoRec.includes('CALL') ? '#27AE60' : '#E74C3C'}
               />
             )}
+          </View>
+        )}
+
+        {/* Advanced non-GTO: pot odds only when facing a raise */}
+        {showPotOddsHint && actionCtx.facingRaise && notation && (
+          <View style={styles.infoRow}>
+            <InfoCell label="POT ODDS" value={`${potOdds}%`} sub="need to call" valueColor={colors.primary} />
           </View>
         )}
 
@@ -182,9 +244,73 @@ export default function ActionPanel() {
   // ── POST-FLOP PANEL ────────────────────────────────────────────────────────
   const streetLabel = state.phase.charAt(0).toUpperCase() + state.phase.slice(1);
   const potBB = Math.round(state.pot * 10) / 10;
+  const postFlopEquity = madeHandResult ? getPostFlopEquity(madeHandResult.rank) : null;
+  const postFlopPotOdds = facingVillainBet && villainPostFlopAction
+    ? calcPotOdds(villainPostFlopAction.betBB, state.pot)
+    : null;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
+
+      {/* GTO Coach panel — post-flop, detail controlled by difficulty */}
+      {gtoShowPanel && madeHandResult && boardTexture && cbetRec && (
+        <View style={styles.gtoPanel}>
+          <Text style={styles.gtoPanelHeader}>GTO COACH  ·  {streetLabel.toUpperCase()}</Text>
+          <View style={styles.gtoStatRow}>
+            {gtoShowHandStatus && (
+              <GTOStat
+                label="EQUITY"
+                value={`~${postFlopEquity!.pct}%`}
+                sub={postFlopEquity!.label.split('—')[0].trim()}
+                color={postFlopEquity!.color}
+              />
+            )}
+            {postFlopPotOdds !== null ? (
+              <GTOStat
+                label="POT ODDS"
+                value={`${postFlopPotOdds}%`}
+                sub={gtoShowHandStatus
+                  ? (postFlopEquity!.pct >= postFlopPotOdds ? '✓ Call is +EV' : '✗ Fold is correct')
+                  : 'need to call'}
+                color={postFlopEquity && postFlopEquity.pct >= postFlopPotOdds ? '#27AE60' : '#E74C3C'}
+              />
+            ) : gtoShowHandStatus ? (
+              <GTOStat label="BOARD" value={boardTexture.label} sub="texture" color={boardTexture.color} />
+            ) : null}
+            {gtoShowActionRec && (
+              <GTOStat
+                label="GTO LINE"
+                value={cbetRec.action === 'bet' ? `BET ${cbetRec.sizingPct}%` : 'CHECK'}
+                color={cbetRec.action === 'bet' ? '#27AE60' : '#3498DB'}
+                sub="recommended"
+              />
+            )}
+          </View>
+          {gtoShowTip && (
+            <View style={styles.gtoTipBox}>
+              <Text style={styles.gtoTipText} numberOfLines={3} ellipsizeMode="tail">
+                {cbetRec.reason}
+                {postFlopPotOdds !== null
+                  ? ' Need ' + postFlopPotOdds + '% equity to call — your hand has ~' + postFlopEquity!.pct + '%.'
+                  : ''}
+              </Text>
+            </View>
+          )}
+        </View>
+      )}
+
+      {/* Advanced non-GTO post-flop: pot odds only when facing a bet */}
+      {showPotOddsHint && facingVillainBet && villainPostFlopAction && (
+        <View style={styles.infoRow}>
+          <InfoCell
+            label="POT ODDS"
+            value={`${calcPotOdds(villainPostFlopAction.betBB, state.pot)}%`}
+            sub="need to call"
+            valueColor={colors.primary}
+          />
+        </View>
+      )}
+
       {/* Board + made hand info */}
       {showInfo && madeHandResult && boardTexture && (
         <View style={styles.postFlopInfoRow}>
@@ -312,6 +438,16 @@ export default function ActionPanel() {
   );
 }
 
+function GTOStat({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
+  return (
+    <View style={styles.gtoStat}>
+      <Text style={styles.gtoStatLabel}>{label}</Text>
+      <Text style={[styles.gtoStatValue, { color: color ?? '#7ECFA0' }]}>{value}</Text>
+      {sub ? <Text style={styles.gtoStatSub}>{sub}</Text> : null}
+    </View>
+  );
+}
+
 function InfoCell({ label, value, sub, valueColor }: { label: string; value: string; sub?: string; valueColor?: string }) {
   return (
     <View style={styles.infoCell}>
@@ -407,4 +543,43 @@ const styles = StyleSheet.create({
   foldBtn: { backgroundColor: '#4A2020', flex: 0.8 },
   callBtn: { backgroundColor: '#102840' },
   raiseBtn: { backgroundColor: '#2A1E08', flex: 0.9 },
+
+  // GTO Coach panel
+  gtoPanel: {
+    marginHorizontal: 12,
+    marginTop: 10,
+    marginBottom: 4,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#27AE6040',
+    backgroundColor: '#0A1F12',
+    paddingHorizontal: 10,
+    paddingTop: 8,
+    paddingBottom: 10,
+  },
+  gtoPanelHeader: {
+    fontSize: 8,
+    fontWeight: '800',
+    letterSpacing: 1.5,
+    color: '#27AE60',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  gtoStatRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 8,
+  },
+  gtoStat: { alignItems: 'center', flex: 1 },
+  gtoStatLabel: { fontSize: 7.5, color: '#4A7A5A', fontWeight: '700', letterSpacing: 0.5, marginBottom: 2 },
+  gtoStatValue: { fontSize: 13, fontWeight: '800' },
+  gtoStatSub: { fontSize: 7.5, color: '#4A7A5A', fontWeight: '500', textAlign: 'center', marginTop: 1 },
+  gtoTipBox: {
+    backgroundColor: '#0D2818',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    marginTop: 4,
+  },
+  gtoTipText: { fontSize: 10.5, color: '#7ECFA0', lineHeight: 15 },
 });

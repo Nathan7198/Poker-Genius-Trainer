@@ -161,6 +161,88 @@ export const BB_DEFENSE = new Set([
 export const THREEBET_VALUE = new Set(['AA','KK','QQ','JJ','TT','AKs','AKo','AQs']);
 export const THREEBET_BLUFF = new Set(['A5s','A4s','A3s','A2s','K5s','Q5s','J5s','87s','76s']);
 
+// ── GTO Mode Data ───────────────────────────────────────────────────────────
+
+export const GTO_POSITION_INFO: Record<Position, {
+  rangeSize: number;  // % of all combos opened
+  openSize: number;   // GTO open size in BB (0 = doesn't open, defends)
+  advantage: string;  // 'EP' | 'MP' | 'LP' | 'SB' | 'BB'
+  positionTip: string;
+}> = {
+  UTG: {
+    rangeSize: 14,
+    openSize: 3,
+    advantage: 'EP',
+    positionTip: 'Earliest position — you act first on every post-flop street. Play tight: your range signals strength so opponents will respect your bets.',
+  },
+  HJ: {
+    rangeSize: 18,
+    openSize: 2.5,
+    advantage: 'MP',
+    positionTip: 'Hijack — slightly later position, open a few more hands. You still have CO, BTN, and blinds left to act, so stay disciplined.',
+  },
+  CO: {
+    rangeSize: 25,
+    openSize: 2.5,
+    advantage: 'LP',
+    positionTip: 'Cutoff — one off the button. Good steal position with position on the blinds. Open wide and attack when folded to.',
+  },
+  BTN: {
+    rangeSize: 42,
+    openSize: 2.5,
+    advantage: 'LP',
+    positionTip: 'Button — the best seat in poker. You always act last post-flop. Open very wide (~42%) and apply maximum pressure on the blinds.',
+  },
+  SB: {
+    rangeSize: 35,
+    openSize: 3,
+    advantage: 'SB',
+    positionTip: 'Small Blind — you are out of position post-flop against everyone. Open strong hands, 3-bet or fold vs raises. Limping is often a leak here.',
+  },
+  BB: {
+    rangeSize: 65,
+    openSize: 0,
+    advantage: 'BB',
+    positionTip: 'Big Blind — you already have 1BB invested and get the best pot odds to defend. Defend wide (65%) but remember you are OOP post-flop against everyone except SB.',
+  },
+};
+
+// Equity estimate vs a standard villain range by made hand rank
+export function getPostFlopEquity(handRank: number): { pct: number; label: string; color: string } {
+  if (handRank >= 6) return { pct: 90, label: 'Monster — nearly always ahead', color: '#27AE60' };
+  if (handRank >= 5) return { pct: 82, label: 'Very strong — value bet always', color: '#27AE60' };
+  if (handRank >= 4) return { pct: 72, label: 'Strong — build the pot', color: '#2ECC71' };
+  if (handRank >= 3) return { pct: 62, label: 'Good — usually ahead', color: '#F39C12' };
+  if (handRank === 2) return { pct: 50, label: 'Medium — pot control often best', color: '#E67E22' };
+  if (handRank === 1) return { pct: 35, label: 'Marginal — bluff-catcher territory', color: '#E74C3C' };
+  return { pct: 18, label: 'Weak — check/fold vs aggression', color: '#C0392B' };
+}
+
+// GTO concept explanation for preflop decision
+export function getPreflopGTOVerdict(
+  notation: string,
+  position: Position,
+  facingRaise: boolean,
+  potOdds: number,
+  equity: number,
+  is3BetPot: boolean,
+): { action: 'raise' | 'call' | 'fold'; reason: string } {
+  const inRange = GTO_RANGES[position].has(notation);
+  const is3BetValue = THREEBET_VALUE.has(notation);
+  const is3BetBluff = THREEBET_BLUFF.has(notation);
+
+  if (!facingRaise) {
+    if (inRange) return { action: 'raise', reason: `${notation} is in your GTO opening range from ${position}. Open to ${GTO_POSITION_INFO[position].openSize}BB.` };
+    return { action: 'fold', reason: `${notation} is outside your GTO ${position} range (${GTO_POSITION_INFO[position].rangeSize}%). Folding avoids playing OOP with a weak range.` };
+  }
+
+  if (is3BetValue) return { action: 'raise', reason: `${notation} is a GTO 3-bet value hand. Raise to deny equity and build the pot with a strong holding.` };
+  if (is3BetBluff) return { action: 'raise', reason: `${notation} is a GTO 3-bet bluff (ace blocker). Polarise your 3-bet range by mixing value and bluffs like this.` };
+  if (equity >= potOdds + 5) return { action: 'call', reason: `Your equity (~${equity}%) exceeds the pot odds (${potOdds}%) by enough to call profitably. Calling keeps villain's bluffs in their range.` };
+  if (position === 'BB' && equity >= potOdds - 2) return { action: 'call', reason: `BB defense: you already have 1BB invested. Pot odds of ${potOdds}% justify a call with ~${equity}% equity.` };
+  return { action: 'fold', reason: `Facing a raise with ~${equity}% equity and ${potOdds}% pot odds — not enough equity to continue. Fold and preserve your stack.` };
+}
+
 // ── Deck Utils ─────────────────────────────────────────────────────────────
 
 export function createDeck(): Card[] {
@@ -780,4 +862,43 @@ export function simulateBotAction(
     if (rand < callThresh || odds < 25) return 'call';
     return 'fold';
   }
+}
+
+// GTO-correct preflop action: uses the bot's actual cards vs position ranges.
+// No limping, no random variance — pure range adherence.
+export function simulateBotGTOAction(
+  cards: Card[],
+  position: Position,
+  facingRaise: boolean,
+  raiseAmount: number,
+  potSize: number,
+): 'fold'|'call'|'raise' {
+  if (cards.length < 2) return 'fold';
+  const notation = getHandNotation(cards[0], cards[1]);
+
+  if (!facingRaise) {
+    // GTO opening: raise if in range, fold otherwise — no limping ever
+    return GTO_RANGES[position].has(notation) ? 'raise' : 'fold';
+  }
+
+  // Facing a raise — BB defends the widest (already has 1BB invested)
+  if (position === 'BB') {
+    if (THREEBET_VALUE.has(notation)) return 'raise';
+    if (BB_DEFENSE.has(notation)) return 'call';
+    return 'fold';
+  }
+
+  // All other positions: 3-bet premium value, 3-bet bluff some, cold-call in-range
+  // hands that have the equity to justify it, fold everything else
+  if (THREEBET_VALUE.has(notation)) return 'raise';
+  if (THREEBET_BLUFF.has(notation) && GTO_RANGES[position].has(notation)) return 'raise';
+
+  if (GTO_RANGES[position].has(notation)) {
+    const equity = getEquity(notation);
+    const odds = calcPotOdds(raiseAmount, potSize);
+    // Only cold-call when we have a meaningful equity edge over the pot odds
+    if (equity > odds + 5) return 'call';
+  }
+
+  return 'fold';
 }

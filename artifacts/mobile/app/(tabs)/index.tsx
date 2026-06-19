@@ -200,8 +200,8 @@ export default function PlayScreen() {
               onPress={() => { setShowModePicker(!showModePicker); setShowDifficultyPicker(false); }}
             >
               <Text style={styles.modeBtnLabel}>MODE</Text>
-              <Text style={[styles.modeBtnText, { color: isPreflopMode ? colors.goldLight : colors.foreground }]}>
-                {isPreflopMode ? 'Pre Flop' : 'Full Hands'}
+              <Text style={[styles.modeBtnText, { color: state.trainingMode === 'gto' ? '#27AE60' : isPreflopMode ? colors.goldLight : colors.foreground }]}>
+                {state.trainingMode === 'gto' ? 'GTO' : isPreflopMode ? 'Pre Flop' : 'Full Hands'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -220,7 +220,7 @@ export default function PlayScreen() {
       {/* Mode picker — rendered outside header so touches aren't clipped */}
       {showModePicker && (
         <View style={[styles.modePicker, { backgroundColor: colors.card, borderColor: colors.border, top: modeBtnY + modeBtnH + 4, left: modeBtnX }]}>
-          {([['full', 'Full Hands'], ['preflop', 'Pre Flop']] as const).map(([val, label]) => {
+          {([['full', 'Full Hands'], ['preflop', 'Pre Flop'], ['gto', 'GTO Mode']] as const).map(([val, label]) => {
             const isSelected = state.trainingMode === val;
             return (
               <TouchableOpacity
