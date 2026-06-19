@@ -116,8 +116,10 @@ export default function PokerTable() {
         {/* Pot display — sits in the clear band below upper seats */}
         {state.pot > 0 && (
           <View style={styles.potBadge}>
-            <Text style={styles.potLabel}>POT</Text>
-            <Text style={styles.potAmount}>{state.pot.toFixed(1)} BB</Text>
+            <View style={styles.potBadgeInner}>
+              <Text style={styles.potLabel}>POT</Text>
+              <Text style={styles.potAmount}>{state.pot.toFixed(1)} BB</Text>
+            </View>
           </View>
         )}
 
@@ -204,6 +206,11 @@ const styles = StyleSheet.create({
   potBadge: {
     position: 'absolute',
     top: '35%',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  potBadgeInner: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.55)',
@@ -219,9 +226,12 @@ const styles = StyleSheet.create({
   communityCards: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 4,
     position: 'absolute',
     top: '55%',
+    left: 0,
+    right: 0,
   },
   preflopHint: {
     paddingHorizontal: 16,
