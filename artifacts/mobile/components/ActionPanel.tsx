@@ -36,7 +36,7 @@ export default function ActionPanel() {
 
   if (!visible) return null;
 
-  const { actionCtx, heroCards, heroPosition, difficulty, villainPostFlopAction, heroIsAggressor, heroActsFirst, heroCheckedStreet } = state;
+  const { actionCtx, heroCards, heroPosition, difficulty, villainPostFlopAction, heroIsAggressor, heroActsFirst, heroCheckedStreet, mainVillainPosition } = state;
   const board = state.communityCards.filter(c => c.faceUp);
   const isGTOMode = state.trainingMode === 'gto';
 
@@ -353,15 +353,15 @@ export default function ActionPanel() {
         <View style={[styles.contextBanner, { backgroundColor: '#60501815', borderColor: '#60501840', borderWidth: 1 }]}>
           <Text style={[styles.contextText, { color: '#C8A840' }]}>
             {heroCheckedStreet
-              ? `You checked · Villain bet ${villainPostFlopAction.betPct}% pot (${villainPostFlopAction.betBB}BB)`
-              : `Villain bets ${villainPostFlopAction.betPct}% pot (${villainPostFlopAction.betBB}BB)`}
+              ? `You checked · ${mainVillainPosition} bets ${villainPostFlopAction.betPct}% pot (${villainPostFlopAction.betBB}BB)`
+              : `${mainVillainPosition} bets ${villainPostFlopAction.betPct}% pot (${villainPostFlopAction.betBB}BB)`}
             {showInfo ? ` · Pot odds: ${calcPotOdds(villainPostFlopAction.betBB, state.pot)}%` : ''}
           </Text>
         </View>
       ) : isPostFlop ? (
         <View style={[styles.contextBanner, { backgroundColor: colors.secondary }]}>
           <Text style={[styles.contextText, { color: colors.mutedForeground }]}>
-            Villain checks · Pot: {potBB}BB · {streetLabel}
+            {heroActsFirst ? `${heroPosition} acts first` : `${mainVillainPosition} checks`} · Pot: {potBB}BB · {streetLabel}
           </Text>
         </View>
       ) : null}

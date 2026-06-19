@@ -982,13 +982,13 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           heroAction as 'none'|'check'|'bet'|'raise',
           villainCards, board,
         );
-      } else if (heroAction === 'raise') {
-        // Villain opened, hero raised → simulate villain's response to the raise
+      } else if (heroAction === 'bet' || heroAction === 'raise') {
+        // Villain opened (or checked), hero bet/raised → simulate villain's response
         villainFinalResponse = simulateVillainPostFlop(
           state.mainVillainType,
           analyzeBoardTexture(board).texture,
           state.pot + betBB,
-          'raise',
+          heroAction as 'bet'|'raise',
           villainCards, board,
         );
       } else {
