@@ -65,38 +65,21 @@ export default function PokerTable() {
 
   const handActiveSet = new Set(state.handActivePlayers);
   const playerSeats = state.players
-    .filter(p => {
-      // Showdown: only show players who were live at the river
-      if (state.phase === 'showdown') {
-        if (handActiveSet.size > 0) return handActiveSet.has(p.position as Position);
-        return p.isActive || p.position === state.mainVillainPosition;
-      }
-      // All other phases: show every seat so the table always looks full
-      return true;
-    })
     .map(p => {
       const pi = PREFLOP_ORDER.indexOf(p.position as Position);
       const rank = (pi - heroIdx + PREFLOP_ORDER.length) % PREFLOP_ORDER.length; // 1..N
 
       let displayPlayer = p;
-      if (isPostFlop && state.phase !== 'showdown') {
+      if (isPostFlop) {
         const psa = state.playerStreetActions[p.position as Position];
         const showChip = psa?.action === 'bet' || psa?.action === 'raise' || psa?.action === 'call';
-        // Player is active mid-street only if not folded preflop AND still in handActivePlayers
+        // A player is active only if they haven't folded preflop AND are still in handActivePlayers
         const isActiveMid = p.isActive && (handActiveSet.size === 0 || handActiveSet.has(p.position as Position));
         displayPlayer = {
           ...p,
           isActive: isActiveMid,
           action: isActiveMid ? (psa?.action ?? null) : null,
           currentBet: isActiveMid && showChip ? (psa?.betBB ?? 0) : 0,
-        };
-      } else if (isPostFlop) {
-        const psa = state.playerStreetActions[p.position as Position];
-        const showChip = psa?.action === 'bet' || psa?.action === 'raise' || psa?.action === 'call';
-        displayPlayer = {
-          ...p,
-          action: psa?.action ?? null,
-          currentBet: showChip ? (psa?.betBB ?? 0) : 0,
         };
       }
 
@@ -123,7 +106,7 @@ export default function PokerTable() {
               key={player.id}
               style={[styles.seatAbsolute, { left: pos.x - 36, top: pos.y + topOffset }]}
             >
-              <PlayerSeat player={player} showCards={state.phase === 'showdown'} />
+              <PlayerSeat player={player} showCards={player.cards.some(c => c.faceUp)} />
             </View>
           );
         })}
