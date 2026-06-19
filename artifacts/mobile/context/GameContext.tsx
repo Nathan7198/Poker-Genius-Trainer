@@ -437,7 +437,7 @@ function simulateBotPreflop(players: BotPlayer[], heroPosition: Position): {
     }
     pot += extraChips;
     return { ...p, action: botAction, currentBet: totalCommit, isActive: botAction !== 'fold',
-             stack: Math.max(0, p.stack - extraChips) };
+             stack: Math.round(Math.max(0, p.stack - extraChips) * 10) / 10 };
   });
 
   // Second pass: if a re-raise happened, earlier callers/raisers must respond.
@@ -454,7 +454,7 @@ function simulateBotPreflop(players: BotPlayer[], heroPosition: Position): {
         if (resp !== 'fold') {
           const extra = raiseAmount - p.currentBet;
           pot += extra;
-          updated[i] = { ...p, currentBet: raiseAmount, stack: Math.max(0, p.stack - extra) };
+          updated[i] = { ...p, currentBet: raiseAmount, stack: Math.round(Math.max(0, p.stack - extra) * 10) / 10 };
         } else {
           updated[i] = { ...p, action: 'fold', isActive: false };
         }
@@ -516,7 +516,7 @@ function applyStackDeductions(
   return players.map(p => {
     const a = streetActions[p.position as Position];
     if (!a || a.betBB <= 0) return p;
-    return { ...p, stack: Math.max(0, p.stack - a.betBB) };
+    return { ...p, stack: Math.round(Math.max(0, p.stack - a.betBB) * 10) / 10 };
   });
 }
 
@@ -680,7 +680,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       // Apply post-hero preflop stack deductions
       const postPreflopPlayers = state.players.map(p => ({
         ...p,
-        stack: Math.max(0, p.stack - (extraCommits.get(p.position) ?? 0)),
+        stack: Math.round(Math.max(0, p.stack - (extraCommits.get(p.position) ?? 0)) * 10) / 10,
       }));
 
       const analysis = buildPreflopAnalysis(state.heroCards, state.heroPosition, heroAction, raiseBB, state.actionCtx, state.mainVillainType);
@@ -689,7 +689,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         return {
           ...state, players: postPreflopPlayers,
           phase: 'showdown', heroBet, pot: preflopPot,
-          heroStack: state.heroStack - heroBet,
+          heroStack: Math.round(Math.max(0, state.heroStack - heroBet) * 10) / 10,
           analysis, showAnalysis: true, lastHeroAction: heroAction,
           heroIsAggressor: false, showdownResult: 'villain', villainFolded: false,
           heroTotalInvestedBB: heroAlreadyIn,
@@ -702,7 +702,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         return {
           ...state, players: postPreflopPlayers,
           phase: 'showdown', heroBet, pot: preflopPot,
-          heroStack: state.heroStack - heroBet,
+          heroStack: Math.round(Math.max(0, state.heroStack - heroBet) * 10) / 10,
           analysis, showAnalysis: true, lastHeroAction: heroAction,
           heroIsAggressor: heroAction === 'raise',
           showdownResult: 'hero', villainFolded: true,
@@ -717,7 +717,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           ...state,
           players: postPreflopPlayers.map(p => ({ ...p, action: null })),
           phase: 'showdown', heroBet, pot: preflopPot,
-          heroStack: state.heroStack - heroBet,
+          heroStack: Math.round(Math.max(0, state.heroStack - heroBet) * 10) / 10,
           analysis, showAnalysis: true, lastHeroAction: heroAction,
           heroIsAggressor: heroAction === 'raise',
           showdownResult: null, villainFolded: false,
@@ -765,7 +765,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         ...state,
         players: flopPlayers.map(p => ({ ...p, action: null })),
         phase: 'flop', heroBet, pot: flopPot,
-        heroStack: state.heroStack - heroBet,
+        heroStack: Math.round(Math.max(0, state.heroStack - heroBet) * 10) / 10,
         communityCards: flopCards, analysis, postFlopAnalysis: null,
         showAnalysis: true, lastHeroAction: heroAction,
         heroIsAggressor, villainPostFlopAction: villain, heroActsFirst,
@@ -890,7 +890,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         if (heroAction === 'fold') {
           return {
             ...state, phase: 'showdown', pot: newPotB,
-            heroStack: Math.max(0, state.heroStack - heroAddedB),
+            heroStack: Math.round(Math.max(0, state.heroStack - heroAddedB) * 10) / 10,
             postFlopAnalysis: pfaB, postFlopAnalysisHistory: newHistB,
             villainPostFlopAction: villainBet, showAnalysis: true,
             postFlopStreetsDone: newDoneB,
@@ -904,7 +904,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         if (vFoldedB) {
           return {
             ...state, phase: 'showdown', pot: newPotB,
-            heroStack: Math.max(0, state.heroStack - heroAddedB),
+            heroStack: Math.round(Math.max(0, state.heroStack - heroAddedB) * 10) / 10,
             postFlopAnalysis: pfaB, postFlopAnalysisHistory: newHistB,
             showAnalysis: true, postFlopStreetsDone: newDoneB,
             showdownResult: 'hero', villainFolded: true,
@@ -916,7 +916,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 
         return {
           ...state, pot: newPotB,
-          heroStack: Math.max(0, state.heroStack - heroAddedB),
+          heroStack: Math.round(Math.max(0, state.heroStack - heroAddedB) * 10) / 10,
           postFlopAnalysis: pfaB, postFlopAnalysisHistory: newHistB,
           villainPostFlopAction: vFinalB, showAnalysis: true,
           postFlopStreetsDone: newDoneB,
@@ -1010,7 +1010,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       if (heroAction === 'fold') {
         return {
           ...state, phase: 'showdown', pot: newPot,
-          heroStack: Math.max(0, state.heroStack - heroAdded),
+          heroStack: Math.round(Math.max(0, state.heroStack - heroAdded) * 10) / 10,
           postFlopAnalysis: pfa, postFlopAnalysisHistory: newHistory,
           villainPostFlopAction: villainOpenAction,
           showAnalysis: true,
@@ -1025,7 +1025,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         // Hero's bet forced villain out — hero wins the pot
         return {
           ...state, phase: 'showdown', pot: newPot,
-          heroStack: Math.max(0, state.heroStack - heroAdded),
+          heroStack: Math.round(Math.max(0, state.heroStack - heroAdded) * 10) / 10,
           postFlopAnalysis: pfa, postFlopAnalysisHistory: newHistory,
           villainPostFlopAction: villainFinalResponse,
           showAnalysis: true,
@@ -1038,7 +1038,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 
       return {
         ...state, pot: newPot,
-        heroStack: Math.max(0, state.heroStack - heroAdded),
+        heroStack: Math.round(Math.max(0, state.heroStack - heroAdded) * 10) / 10,
         postFlopAnalysis: pfa, postFlopAnalysisHistory: newHistory,
         villainPostFlopAction: villainFinalResponse,
         showAnalysis: true,

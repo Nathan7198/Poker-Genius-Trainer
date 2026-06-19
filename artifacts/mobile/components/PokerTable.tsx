@@ -164,7 +164,7 @@ export default function PokerTable() {
             <Text style={styles.heroFoldedLabel}>FOLDED</Text>
           ) : (
             <>
-              <Text style={styles.heroStack}>{state.heroStack}BB</Text>
+              <Text style={styles.heroStack}>{Number.isInteger(state.heroStack) ? state.heroStack : state.heroStack.toFixed(1)}BB</Text>
               {state.heroBet > 0 && (
                 <Text style={styles.heroBetText}>Bet: {state.heroBet}BB</Text>
               )}

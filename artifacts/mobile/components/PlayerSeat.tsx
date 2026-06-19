@@ -63,7 +63,7 @@ export default function PlayerSeat({ player, showCards }: PlayerSeatProps) {
           {player.name}
         </Text>
         <Text style={[styles.stack, { color: colors.mutedForeground }]}>
-          {player.stack}BB
+          {Number.isInteger(player.stack) ? player.stack : player.stack.toFixed(1)}BB
         </Text>
       </View>
 
