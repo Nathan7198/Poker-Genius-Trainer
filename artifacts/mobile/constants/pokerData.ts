@@ -13,16 +13,22 @@ export const RANK_VALUES: Record<Rank, number> = {
   'A':14,'K':13,'Q':12,'J':11,'T':10,'9':9,'8':8,'7':7,'6':6,'5':5,'4':4,'3':3,'2':2,
 };
 
-export type Position = 'UTG'|'HJ'|'CO'|'BTN'|'SB'|'BB';
+export type Position = 'UTG'|'UTG2'|'UTG3'|'MP'|'HJ'|'CO'|'BTN'|'SB'|'BB';
+/** Default 6-max position set — used for Custom mode and backward compat */
 export const POSITIONS: Position[] = ['UTG','HJ','CO','BTN','SB','BB'];
 export const POSITION_LABELS: Record<Position, string> = {
-  UTG:'Under the Gun', HJ:'Hijack', CO:'Cut-Off', BTN:'Button', SB:'Small Blind', BB:'Big Blind',
+  UTG:'Under the Gun', UTG2:'UTG+1', UTG3:'UTG+2', MP:'Middle Position',
+  HJ:'Hijack', CO:'Cut-Off', BTN:'Button', SB:'Small Blind', BB:'Big Blind',
 };
 export const POSITION_COLORS: Record<Position, string> = {
-  UTG:'#E74C3C', HJ:'#E67E22', CO:'#F1C40F', BTN:'#2ECC71', SB:'#3498DB', BB:'#9B59B6',
+  UTG:'#E74C3C', UTG2:'#CC3E2F', UTG3:'#B03529', MP:'#E86C35',
+  HJ:'#E67E22', CO:'#F1C40F', BTN:'#2ECC71', SB:'#3498DB', BB:'#9B59B6',
 };
 export const POSITION_DESCRIPTIONS: Record<Position, string> = {
   UTG: 'First to act preflop. The tightest position — you have no positional info. Open only strong hands.',
+  UTG2: 'UTG+1 — one after UTG in full ring. Very early position, play tight like UTG.',
+  UTG3: 'UTG+2 — third to act in full ring. Still very early, maintain a tight opening range.',
+  MP: 'Middle Position — slightly wider than UTG. You still have HJ, CO, BTN and the blinds behind you.',
   HJ: 'Hijack — two left of the button. Slightly wider than UTG. You act before CO, BTN, SB, BB.',
   CO: 'Cut-Off — one left of the button. Great spot to steal. Wide open range is profitable here.',
   BTN: 'The Button — best position in poker. You act last postflop every street. Open very wide.',
@@ -110,6 +116,9 @@ const SB_SET = new Set([...BTN_SET, ...SB_EXTRA]);
 
 export const GTO_RANGES: Record<Position, Set<string>> = {
   UTG: UTG_SET,
+  UTG2: UTG_SET,
+  UTG3: UTG_SET,
+  MP: HJ_SET,
   HJ: HJ_SET,
   CO: CO_SET,
   BTN: BTN_SET,
@@ -175,6 +184,24 @@ export const GTO_POSITION_INFO: Record<Position, {
     advantage: 'EP',
     positionTip: 'Earliest position — you act first on every post-flop street. Play tight: your range signals strength so opponents will respect your bets.',
   },
+  UTG2: {
+    rangeSize: 14,
+    openSize: 3,
+    advantage: 'EP',
+    positionTip: 'UTG+1 in full ring — still very early position. Play tight like UTG: your range signals strength and you have many players still to act.',
+  },
+  UTG3: {
+    rangeSize: 15,
+    openSize: 3,
+    advantage: 'EP',
+    positionTip: 'UTG+2 in full ring — third to act. Slightly wider than UTG but stay disciplined with 6+ players left behind you preflop.',
+  },
+  MP: {
+    rangeSize: 18,
+    openSize: 2.5,
+    advantage: 'MP',
+    positionTip: 'Middle Position (Lojack) — similar range to Hijack in 6-max. You still have HJ, CO, BTN, and the blinds to act after you.',
+  },
   HJ: {
     rangeSize: 18,
     openSize: 2.5,
@@ -206,6 +233,29 @@ export const GTO_POSITION_INFO: Record<Position, {
     positionTip: 'Big Blind — you already have 1BB invested and get the best pot odds to defend. Defend wide (65%) but remember you are OOP post-flop against everyone except SB.',
   },
 };
+
+// ── Position Order & Table Size ──────────────────────────────────────────────
+
+/** Full preflop action order (9-max), used as the universal reference. */
+export const PREFLOP_ORDER: Position[] = ['UTG','UTG2','UTG3','MP','HJ','CO','BTN','SB','BB'];
+/** Full post-flop action order: OOP (blinds) first, BTN last. */
+export const POSTFLOP_ORDER: Position[] = ['SB','BB','UTG','UTG2','UTG3','MP','HJ','CO','BTN'];
+
+/** Which positions are active for each table size (2–9). */
+export const POSITIONS_BY_SIZE: Record<number, Position[]> = {
+  2: ['BTN','BB'],
+  3: ['BTN','SB','BB'],
+  4: ['CO','BTN','SB','BB'],
+  5: ['HJ','CO','BTN','SB','BB'],
+  6: ['UTG','HJ','CO','BTN','SB','BB'],
+  7: ['UTG','MP','HJ','CO','BTN','SB','BB'],
+  8: ['UTG','UTG2','MP','HJ','CO','BTN','SB','BB'],
+  9: ['UTG','UTG2','UTG3','MP','HJ','CO','BTN','SB','BB'],
+};
+
+export function getPositionsForSize(size: number): Position[] {
+  return POSITIONS_BY_SIZE[Math.max(2, Math.min(9, size))] ?? POSITIONS_BY_SIZE[6];
+}
 
 // Equity estimate vs a standard villain range by made hand rank
 export function getPostFlopEquity(handRank: number): { pct: number; label: string; color: string } {

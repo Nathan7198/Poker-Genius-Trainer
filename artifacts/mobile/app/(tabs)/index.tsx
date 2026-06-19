@@ -16,7 +16,7 @@ import HandReportModal from '@/components/HandReportModal';
 import CustomSetup from '@/components/CustomSetup';
 import {
   DIFFICULTIES, DIFFICULTY_DESCRIPTIONS, getHandNotation,
-  evaluateMadeHand, MADE_HAND_COLORS,
+  evaluateMadeHand, MADE_HAND_COLORS, PREFLOP_ORDER,
 } from '@/constants/pokerData';
 import type { Difficulty } from '@/constants/pokerData';
 
@@ -28,12 +28,14 @@ function cardLabel(rank: string, suit: string) {
 }
 
 export default function PlayScreen() {
-  const { state, startNewHand, setDifficulty, setTrainingMode, goIdle } = useGame();
+  const { state, startNewHand, setDifficulty, setTrainingMode, setTableSize, goIdle } = useGame();
   const { logHandHistory, recordHandResult } = useStats();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const [showDifficultyPicker, setShowDifficultyPicker] = React.useState(false);
   const [showModePicker, setShowModePicker] = React.useState(false);
+  const [showTablePicker, setShowTablePicker] = React.useState(false);
+  const [expandCustomSizes, setExpandCustomSizes] = React.useState(false);
   const [showHandReport, setShowHandReport] = React.useState(false);
   const isPreflopMode = state.trainingMode === 'preflop';
   const modeBtnRef = React.useRef<View>(null);
@@ -137,6 +139,16 @@ export default function PlayScreen() {
     setShowDifficultyPicker(false);
   }
 
+  function handleTableSize(size: number) {
+    setTableSize(size);
+    setShowTablePicker(false);
+    setExpandCustomSizes(false);
+  }
+
+  const tableSz = state.tableSize;
+  const tableBtnText = tableSz === 9 ? '9P' : tableSz === 6 ? '6P' : tableSz === 2 ? 'HU' : `${tableSz}P`;
+  const isCustomSize = tableSz !== 6 && tableSz !== 9;
+
   const diffColors: Record<Difficulty, string> = {
     Beginner: '#27AE60',
     Intermediate: '#3498DB',
@@ -198,7 +210,7 @@ export default function PlayScreen() {
           >
             <TouchableOpacity
               style={[styles.modeBtn, { borderColor: '#33333366' }]}
-              onPress={() => { setShowModePicker(!showModePicker); setShowDifficultyPicker(false); }}
+              onPress={() => { setShowModePicker(!showModePicker); setShowDifficultyPicker(false); setShowTablePicker(false); }}
             >
               <Text style={styles.modeBtnLabel}>MODE</Text>
               <Text style={[styles.modeBtnText, {
@@ -215,8 +227,15 @@ export default function PlayScreen() {
             </TouchableOpacity>
           </View>
           <TouchableOpacity
+            style={[styles.tableBtn, { borderColor: isCustomSize ? colors.goldLight + '66' : '#33333366', backgroundColor: isCustomSize ? '#A8882A15' : '#181818' }]}
+            onPress={() => { setShowTablePicker(!showTablePicker); setShowModePicker(false); setShowDifficultyPicker(false); }}
+          >
+            <Text style={styles.tableBtnLabel}>TABLE</Text>
+            <Text style={[styles.tableBtnText, { color: isCustomSize ? colors.goldLight : colors.foreground }]}>{tableBtnText}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
             style={[styles.diffBtn, { backgroundColor: diffColors[state.difficulty] + '22', borderColor: diffColors[state.difficulty] + '66' }]}
-            onPress={() => { setShowDifficultyPicker(!showDifficultyPicker); setShowModePicker(false); }}
+            onPress={() => { setShowDifficultyPicker(!showDifficultyPicker); setShowModePicker(false); setShowTablePicker(false); }}
           >
             <Text style={styles.diffBtnLabel}>DIFFICULTY</Text>
             <Text style={[styles.diffBtnText, { color: diffColors[state.difficulty] }]}>
@@ -266,18 +285,67 @@ export default function PlayScreen() {
         </View>
       )}
 
+      {/* Table size picker */}
+      {showTablePicker && (
+        <View style={[styles.tablePicker, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          {([
+            [9, 'Full Ring', '9 players · standard full ring'],
+            [6, '6-Max', '6 players · default format'],
+          ] as const).map(([size, label, desc]) => {
+            const sel = tableSz === size;
+            return (
+              <TouchableOpacity
+                key={size}
+                style={[styles.tableOption, sel && { backgroundColor: '#A8882A18' }]}
+                onPress={() => handleTableSize(size)}
+              >
+                <View style={styles.tableOptionRow}>
+                  <Feather name="check" size={13} color={sel ? colors.goldLight : 'transparent'} style={{ marginRight: 6 }} />
+                  <Text style={[styles.tableOptionName, { color: sel ? colors.goldLight : colors.foreground }]}>{label}</Text>
+                </View>
+                <Text style={[styles.tableOptionDesc, { color: colors.mutedForeground }]}>{desc}</Text>
+              </TouchableOpacity>
+            );
+          })}
+          <TouchableOpacity
+            style={[styles.tableOption, isCustomSize && { backgroundColor: '#A8882A18' }]}
+            onPress={() => setExpandCustomSizes(!expandCustomSizes)}
+          >
+            <View style={styles.tableOptionRow}>
+              <Feather name={expandCustomSizes ? 'chevron-down' : 'chevron-right'} size={13} color={isCustomSize ? colors.goldLight : colors.mutedForeground} style={{ marginRight: 6 }} />
+              <Text style={[styles.tableOptionName, { color: isCustomSize ? colors.goldLight : colors.foreground }]}>Customise</Text>
+            </View>
+            <Text style={[styles.tableOptionDesc, { color: colors.mutedForeground }]}>Any size · 2–9 players</Text>
+          </TouchableOpacity>
+          {expandCustomSizes && (
+            <View style={styles.customSizes}>
+              {([2,3,4,5,7,8] as const).map(n => {
+                const sel = tableSz === n;
+                return (
+                  <TouchableOpacity
+                    key={n}
+                    style={[styles.customSizeBtn, { borderColor: sel ? colors.goldLight : colors.border, backgroundColor: sel ? '#A8882A18' : 'transparent' }]}
+                    onPress={() => handleTableSize(n)}
+                  >
+                    <Text style={[styles.customSizeText, { color: sel ? colors.goldLight : colors.foreground }]}>{n}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+        </View>
+      )}
+
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         {/* Table — visible during play AND at showdown (villain cards auto-revealed in seat) */}
         {!isIdle && <PokerTable />}
 
         {/* Preflop action trail — shows each player's action in position order */}
         {state.phase === 'preflop' && !state.showAnalysis && (() => {
-          const PF_ORDER = ['UTG', 'HJ', 'CO', 'BTN', 'SB', 'BB'] as const;
-          type PFPos = typeof PF_ORDER[number];
-          const heroIdx = PF_ORDER.indexOf(state.heroPosition as PFPos);
+          const heroIdx = PREFLOP_ORDER.indexOf(state.heroPosition);
           const preHeroBots = state.players
-            .filter(p => PF_ORDER.indexOf(p.position as PFPos) < heroIdx && p.action !== null)
-            .sort((a, b) => PF_ORDER.indexOf(a.position as PFPos) - PF_ORDER.indexOf(b.position as PFPos));
+            .filter(p => PREFLOP_ORDER.indexOf(p.position) < heroIdx && p.action !== null)
+            .sort((a, b) => PREFLOP_ORDER.indexOf(a.position) - PREFLOP_ORDER.indexOf(b.position));
           if (preHeroBots.length === 0) return null;
 
           const chipColor = (act: string | null) =>
@@ -449,6 +517,22 @@ const styles = StyleSheet.create({
   diffOptionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   diffOptionName: { fontSize: 14, fontWeight: '700' },
   diffOptionDesc: { fontSize: 11, marginTop: 2, lineHeight: 15 },
+  tableBtn: { paddingHorizontal: 8, paddingVertical: 5, borderRadius: 8, borderWidth: 1, alignItems: 'center', minWidth: 52 },
+  tableBtnLabel: { fontSize: 8, fontWeight: '700', letterSpacing: 1.5, color: '#888', marginBottom: 1 },
+  tableBtnText: { fontSize: 12, fontWeight: '800', letterSpacing: 0.3 },
+  tablePicker: {
+    position: 'absolute', right: 12, top: 62, zIndex: 100,
+    borderRadius: 12, borderWidth: 1, width: 260,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5, shadowRadius: 8, elevation: 10,
+  },
+  tableOption: { padding: 12, borderRadius: 8 },
+  tableOptionRow: { flexDirection: 'row', alignItems: 'center' },
+  tableOptionName: { fontSize: 14, fontWeight: '700' },
+  tableOptionDesc: { fontSize: 11, marginTop: 2, lineHeight: 15 },
+  customSizes: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: 12, paddingBottom: 10 },
+  customSizeBtn: { width: 36, height: 36, borderRadius: 8, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  customSizeText: { fontSize: 14, fontWeight: '800' },
   scroll: { flex: 1 },
   scrollContent: { paddingBottom: 8, paddingTop: 8 },
   actionTrail: { marginHorizontal: 12, marginTop: 6 },

@@ -1,19 +1,17 @@
 import React from 'react';
 import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useGame } from '@/context/GameContext';
-import { POSITIONS, Position } from '@/constants/pokerData';
+import { PREFLOP_ORDER, Position } from '@/constants/pokerData';
 import PlayingCard from './PlayingCard';
 import PlayerSeat from './PlayerSeat';
 
-// Clockwise from hero (bottom-center):
-//   150° = lower-left (1st clockwise = SB when hero is BTN)
-//   210° = upper-left
-//   270° = top-center
-//   330° = upper-right
-//    30° = lower-right (last clockwise = CO when hero is BTN)
-// In screen coords (y increases downward), going clockwise from the bottom
-// means angles INCREASE from 90°: 90→150→210→270→330→30→90.
-const OPPONENT_ANGLES_DEG = [150, 210, 270, 330, 30];
+// Dynamic seat angles: N opponents spread from 150° to 30° counter-clockwise
+// through the top (240° arc). N=5 reproduces the original [150,210,270,330,30].
+function getOpponentAngles(n: number): number[] {
+  if (n <= 0) return [];
+  if (n === 1) return [270];
+  return Array.from({ length: n }, (_, i) => (150 + (i * 240) / (n - 1)) % 360);
+}
 
 function degToRad(deg: number) {
   return (deg * Math.PI) / 180;
@@ -58,28 +56,41 @@ export default function PokerTable() {
     };
   }
 
-  // Map each opponent to a fixed seat slot by their clockwise rank from hero:
-  //   rank 1 (first clockwise) → seat[0] = 150° lower-left
-  //   rank 5 (last  clockwise) → seat[4] = 30°  lower-right
-  // Using rank (not array index) ensures partial tables place players in the
-  // correct physical seat (e.g. SB = rank 5 from BB → always lower-right).
-  const heroIdx = POSITIONS.indexOf(state.heroPosition);
+  // Map each opponent to a fixed seat slot by their clockwise rank from hero.
+  // Use PREFLOP_ORDER (all 9 positions) so new positions like UTG2/MP work.
+  const heroIdx = PREFLOP_ORDER.indexOf(state.heroPosition);
+  const numBots = state.players.length;
+  const opponentAngles = getOpponentAngles(numBots);
   const isPostFlop = ['flop', 'turn', 'river', 'showdown'].includes(state.phase);
 
   const handActiveSet = new Set(state.handActivePlayers);
   const playerSeats = state.players
     .filter(p => {
-      if (!isPostFlop) return true;
-      if (state.phase === 'showdown') return p.isActive || p.position === state.mainVillainPosition;
-      if (handActiveSet.size > 0) return handActiveSet.has(p.position as Position);
-      return p.isActive || p.position === state.mainVillainPosition;
+      // Showdown: only show players who were live at the river
+      if (state.phase === 'showdown') {
+        if (handActiveSet.size > 0) return handActiveSet.has(p.position as Position);
+        return p.isActive || p.position === state.mainVillainPosition;
+      }
+      // All other phases: show every seat so the table always looks full
+      return true;
     })
     .map(p => {
-      const pi = POSITIONS.indexOf(p.position as (typeof POSITIONS)[number]);
-      const rank = (pi - heroIdx + POSITIONS.length) % POSITIONS.length; // 1..5
+      const pi = PREFLOP_ORDER.indexOf(p.position as Position);
+      const rank = (pi - heroIdx + PREFLOP_ORDER.length) % PREFLOP_ORDER.length; // 1..N
 
       let displayPlayer = p;
-      if (isPostFlop) {
+      if (isPostFlop && state.phase !== 'showdown') {
+        const psa = state.playerStreetActions[p.position as Position];
+        const showChip = psa?.action === 'bet' || psa?.action === 'raise' || psa?.action === 'call';
+        // Player is active mid-street only if not folded preflop AND still in handActivePlayers
+        const isActiveMid = p.isActive && (handActiveSet.size === 0 || handActiveSet.has(p.position as Position));
+        displayPlayer = {
+          ...p,
+          isActive: isActiveMid,
+          action: isActiveMid ? (psa?.action ?? null) : null,
+          currentBet: isActiveMid && showChip ? (psa?.betBB ?? 0) : 0,
+        };
+      } else if (isPostFlop) {
         const psa = state.playerStreetActions[p.position as Position];
         const showChip = psa?.action === 'bet' || psa?.action === 'raise' || psa?.action === 'call';
         displayPlayer = {
@@ -89,9 +100,9 @@ export default function PokerTable() {
         };
       }
 
-      return { player: displayPlayer, seatIdx: rank - 1 }; // seatIdx 0..4
+      return { player: displayPlayer, seatIdx: rank - 1 }; // seatIdx 0..N-1
     })
-    .filter(s => s.seatIdx >= 0 && s.seatIdx < 5);
+    .filter(s => s.seatIdx >= 0 && s.seatIdx < numBots);
 
   return (
     <View style={[styles.outer, { height: TABLE_H + SEAT_OVERFLOW + 90, paddingTop: SEAT_OVERFLOW, width: tableW }]}>
@@ -104,8 +115,9 @@ export default function PokerTable() {
 
         {/* Bot player seats — absolutely positioned on the oval */}
         {playerSeats.map(({ player, seatIdx }) => {
-          const pos = getSeatPos(OPPONENT_ANGLES_DEG[seatIdx]);
-          const topOffset = getSeatTopOffset(OPPONENT_ANGLES_DEG[seatIdx]);
+          const angleDeg = opponentAngles[seatIdx] ?? 270;
+          const pos = getSeatPos(angleDeg);
+          const topOffset = getSeatTopOffset(angleDeg);
           return (
             <View
               key={player.id}

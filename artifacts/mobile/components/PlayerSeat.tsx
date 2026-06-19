@@ -31,9 +31,8 @@ export default function PlayerSeat({ player, showCards }: PlayerSeatProps) {
   const colors = useColors();
   const { state } = useGame();
   const typeInfo = PLAYER_TYPE_INFO[player.type];
-  const posColor = POSITION_COLORS[player.position];
+  const posColor = POSITION_COLORS[player.position] ?? '#888';
   const folded = !player.isActive;
-  const isGTOMode = state.trainingMode === 'gto';
 
   return (
     <View style={[styles.container, folded && styles.folded]}>
@@ -51,15 +50,13 @@ export default function PlayerSeat({ player, showCards }: PlayerSeatProps) {
         ))}
       </View>
 
-      {/* Player type badge — hidden in GTO mode (all play standard) */}
-      {!isGTOMode && (
-        <View style={[styles.typeBadge, { backgroundColor: typeInfo.color + '22', borderColor: typeInfo.color + '55' }]}>
-          <Feather name={(TYPE_ICONS[player.type] ?? 'user') as any} size={7} color={typeInfo.color} />
-          <Text style={[styles.typeText, { color: typeInfo.color }]} numberOfLines={1}>
-            {typeInfo.shortLabel} · {typeInfo.vpip}%
-          </Text>
-        </View>
-      )}
+      {/* Player type badge */}
+      <View style={[styles.typeBadge, { backgroundColor: typeInfo.color + '22', borderColor: typeInfo.color + '55' }]}>
+        <Feather name={(TYPE_ICONS[player.type] ?? 'user') as any} size={7} color={typeInfo.color} />
+        <Text style={[styles.typeText, { color: typeInfo.color }]} numberOfLines={1}>
+          {typeInfo.shortLabel} · {typeInfo.vpip}%
+        </Text>
+      </View>
 
       {/* Player info */}
       <View style={[styles.info, { backgroundColor: colors.card }]}>
