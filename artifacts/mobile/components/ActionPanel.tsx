@@ -44,6 +44,14 @@ export default function ActionPanel() {
   const preflopEquity = notation ? getEquity(notation) : 50;
   const preflopStrength = notation ? getHandStrength(notation) : 'Weak';
   const heroAlreadyIn = heroPosition === 'BB' ? 1 : heroPosition === 'SB' ? 0.5 : 0;
+  // Maximum total chips hero can put in this hand (blind already posted + remaining stack)
+  const heroMaxCommit = Math.round((heroAlreadyIn + state.heroStack) * 10) / 10;
+  // Effective call amount — capped at what hero actually has
+  const preflopCallAmt = Math.min(actionCtx.facingRaise ? actionCtx.raiseAmount : 1, heroMaxCommit);
+  const preflopCallAllIn = preflopCallAmt >= heroMaxCommit && heroMaxCommit < (actionCtx.facingRaise ? actionCtx.raiseAmount : 1);
+  // Post-flop effective call — capped at heroStack (blinds already accounted for in stack)
+  const postFlopCallAmt = Math.min(villainPostFlopAction?.betBB ?? 0, state.heroStack);
+  const postFlopCallAllIn = postFlopCallAmt >= state.heroStack && state.heroStack < (villainPostFlopAction?.betBB ?? 0);
   const potOdds = calcPotOdds(Math.max(0, actionCtx.raiseAmount - heroAlreadyIn), actionCtx.potSize);
   // Classic info row — shown at Beginner/Intermediate regardless of mode
   const showInfo       = difficulty === 'Beginner' || difficulty === 'Intermediate';
@@ -186,24 +194,32 @@ export default function ActionPanel() {
           <View style={styles.sizingPanel}>
             <Text style={[styles.sizingLabel, { color: colors.mutedForeground }]}>SELECT RAISE SIZE (BB)</Text>
             <View style={styles.presetGrid}>
-              {RAISE_PRESETS.map(bb => (
+              {RAISE_PRESETS.filter(bb => bb < heroMaxCommit).map(bb => (
                 <TouchableOpacity
                   key={bb}
                   style={[styles.preset, { backgroundColor: selectedRaise === bb ? colors.primary : '#1A1A1A', borderColor: selectedRaise === bb ? colors.primary : '#282828' }]}
                   onPress={() => setSelectedRaise(bb)}
                 >
                   <Text style={[styles.presetText, { color: selectedRaise === bb ? colors.primaryForeground : colors.foreground }]}>
-                    {bb}x
+                    {bb}BB
                   </Text>
                 </TouchableOpacity>
               ))}
+              <TouchableOpacity
+                key="allin"
+                style={[styles.preset, { backgroundColor: selectedRaise === heroMaxCommit ? '#7B241C' : '#1A1A1A', borderColor: selectedRaise === heroMaxCommit ? '#E74C3C' : '#282828' }]}
+                onPress={() => setSelectedRaise(heroMaxCommit)}
+              >
+                <Text style={[styles.presetText, { color: selectedRaise === heroMaxCommit ? '#FFF' : colors.foreground }]}>ALL IN</Text>
+                <Text style={[styles.presetSub, { color: selectedRaise === heroMaxCommit ? '#FF9999' : colors.mutedForeground }]}>{heroMaxCommit}BB</Text>
+              </TouchableOpacity>
             </View>
             <TouchableOpacity
-              style={[styles.confirmBtn, { backgroundColor: colors.primary }]}
-              onPress={() => handlePreflop('raise', selectedRaise)}
+              style={[styles.confirmBtn, { backgroundColor: selectedRaise >= heroMaxCommit ? '#7B241C' : colors.primary }]}
+              onPress={() => handlePreflop('raise', Math.min(selectedRaise, heroMaxCommit))}
             >
               <Text style={[styles.confirmBtnText, { color: colors.primaryForeground }]}>
-                RAISE TO {selectedRaise}BB
+                {selectedRaise >= heroMaxCommit ? `ALL IN — ${heroMaxCommit}BB` : `RAISE TO ${selectedRaise}BB`}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={() => setRaiseMode(false)} style={styles.cancelRow}>
@@ -226,9 +242,9 @@ export default function ActionPanel() {
               <Text style={styles.btnText}>
                 {!actionCtx.facingRaise && heroPosition === 'BB'
                   ? 'CHECK'
-                  : actionCtx.facingRaise
-                    ? `CALL ${actionCtx.raiseAmount}BB`
-                    : `CALL ${heroPosition === 'SB' ? '0.5' : '1'}BB`
+                  : preflopCallAllIn
+                    ? `ALL IN ${preflopCallAmt}BB`
+                    : `CALL ${preflopCallAmt}BB`
                 }
               </Text>
             </TouchableOpacity>
@@ -370,35 +386,45 @@ export default function ActionPanel() {
       {betMode ? (
         <View style={styles.sizingPanel}>
           <Text style={[styles.sizingLabel, { color: colors.mutedForeground }]}>
-            BET SIZE (% of {potBB}BB pot)
+            BET SIZE (% of {potBB}BB pot · max {state.heroStack}BB)
           </Text>
           <View style={styles.presetGrid}>
             {BET_PCT_PRESETS.map(pct => {
-              const bbAmt = Math.round((pct / 100) * state.pot * 10) / 10;
+              const rawBB = Math.round((pct / 100) * state.pot * 10) / 10;
+              const bbAmt = Math.min(rawBB, state.heroStack);
+              const isAllIn = bbAmt >= state.heroStack;
+              const selected = selectedBetPct === pct;
               return (
                 <TouchableOpacity
                   key={pct}
-                  style={[styles.preset, { backgroundColor: selectedBetPct === pct ? '#3D2E08' : '#1A1A1A', borderColor: selectedBetPct === pct ? '#A8882A' : '#282828' }]}
+                  style={[styles.preset, { backgroundColor: selected ? (isAllIn ? '#7B241C' : '#3D2E08') : '#1A1A1A', borderColor: selected ? (isAllIn ? '#E74C3C' : '#A8882A') : '#282828' }]}
                   onPress={() => setSelectedBetPct(pct)}
                 >
-                  <Text style={[styles.presetText, { color: selectedBetPct === pct ? '#FFF' : colors.foreground }]}>
-                    {pct}%
+                  <Text style={[styles.presetText, { color: selected ? '#FFF' : colors.foreground }]}>
+                    {isAllIn ? 'ALL IN' : `${pct}%`}
                   </Text>
-                  <Text style={[styles.presetSub, { color: selectedBetPct === pct ? '#F0D89080' : colors.mutedForeground }]}>
+                  <Text style={[styles.presetSub, { color: selected ? '#F0D89080' : colors.mutedForeground }]}>
                     {bbAmt}BB
                   </Text>
                 </TouchableOpacity>
               );
             })}
           </View>
-          <TouchableOpacity
-            style={[styles.confirmBtn, { backgroundColor: '#3D2E08' }]}
-            onPress={() => handlePostFlop('bet', selectedBetPct)}
-          >
-            <Text style={[styles.confirmBtnText, { color: '#FFF' }]}>
-              BET {selectedBetPct}% ({Math.round((selectedBetPct / 100) * state.pot * 10) / 10}BB)
-            </Text>
-          </TouchableOpacity>
+          {(() => {
+            const rawBB = Math.round((selectedBetPct / 100) * state.pot * 10) / 10;
+            const bbAmt = Math.min(rawBB, state.heroStack);
+            const isAllIn = bbAmt >= state.heroStack;
+            return (
+              <TouchableOpacity
+                style={[styles.confirmBtn, { backgroundColor: isAllIn ? '#7B241C' : '#3D2E08' }]}
+                onPress={() => handlePostFlop('bet', selectedBetPct)}
+              >
+                <Text style={[styles.confirmBtnText, { color: '#FFF' }]}>
+                  {isAllIn ? `ALL IN — ${bbAmt}BB` : `BET ${selectedBetPct}% (${bbAmt}BB)`}
+                </Text>
+              </TouchableOpacity>
+            );
+          })()}
           <TouchableOpacity onPress={() => setBetMode(false)} style={styles.cancelRow}>
             <Text style={[styles.cancelText, { color: colors.mutedForeground }]}>Cancel</Text>
           </TouchableOpacity>
@@ -411,11 +437,11 @@ export default function ActionPanel() {
                 <Text style={styles.btnText}>FOLD</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.btn, styles.callBtn, { flex: 1 }]}
+                style={[styles.btn, postFlopCallAllIn ? styles.allInBtn : styles.callBtn, { flex: 1 }]}
                 onPress={() => handlePostFlop('call')}
               >
                 <Text style={styles.btnText}>
-                  CALL {villainPostFlopAction?.betBB}BB
+                  {postFlopCallAllIn ? `ALL IN ${postFlopCallAmt}BB` : `CALL ${postFlopCallAmt}BB`}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.btn, styles.raiseBtn, { flex: 0.85 }]} onPress={() => setBetMode(true)}>
@@ -543,6 +569,7 @@ const styles = StyleSheet.create({
   foldBtn: { backgroundColor: '#4A2020', flex: 0.8 },
   callBtn: { backgroundColor: '#102840' },
   raiseBtn: { backgroundColor: '#2A1E08', flex: 0.9 },
+  allInBtn: { backgroundColor: '#4A1010' },
 
   // GTO Coach panel
   gtoPanel: {
