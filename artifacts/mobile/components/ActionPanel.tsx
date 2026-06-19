@@ -150,9 +150,11 @@ export default function ActionPanel() {
           </View>
         ) : (
           <View style={styles.buttons}>
-            <TouchableOpacity style={[styles.btn, styles.foldBtn]} onPress={() => handlePreflop('fold')}>
-              <Text style={styles.btnText}>FOLD</Text>
-            </TouchableOpacity>
+            {!(heroPosition === 'BB' && !actionCtx.facingRaise) && (
+              <TouchableOpacity style={[styles.btn, styles.foldBtn]} onPress={() => handlePreflop('fold')}>
+                <Text style={styles.btnText}>FOLD</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               style={[styles.btn, styles.callBtn, { flex: 1 }]}
               onPress={() => handlePreflop(
