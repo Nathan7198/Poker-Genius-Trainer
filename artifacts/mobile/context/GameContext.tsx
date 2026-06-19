@@ -1189,9 +1189,8 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           state.players.find(p => p.position === state.mainVillainPosition && p.isActive)
           ?? state.players.find(p => (state.handActivePlayers as string[]).includes(p.position))
           ?? villainPlayer;
-        // Only reveal the showdown villain's cards, not all active players
         const revealedPlayers = state.players.map(p =>
-          p.position === showdownVillain.position
+          p.isActive
             ? { ...p, cards: p.cards.map(c => ({ ...c, faceUp: true })) }
             : p
         );
