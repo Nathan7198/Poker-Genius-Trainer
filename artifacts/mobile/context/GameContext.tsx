@@ -441,12 +441,14 @@ function simulateBotPreflop(players: BotPlayer[], heroPosition: Position): {
     let extraChips = 0;
     if (botAction === 'raise') {
       totalCommit = facingRaise ? raiseAmount * 3 : 3;
-      extraChips = totalCommit - alreadyPosted;
+      extraChips = Math.min(totalCommit - alreadyPosted, p.stack); // cap at remaining stack
+      totalCommit = alreadyPosted + extraChips;
       facingRaise = true; raiseAmount = totalCommit; raisedByPosition = p.position;
     } else if (botAction === 'call') {
       // facingRaise → call the raise; !facingRaise → open-limp for 1BB
       totalCommit = facingRaise ? raiseAmount : 1;
-      extraChips = Math.max(0, totalCommit - alreadyPosted);
+      extraChips = Math.min(Math.max(0, totalCommit - alreadyPosted), p.stack);
+      totalCommit = alreadyPosted + extraChips;
       calledByCount++;
     }
     pot += extraChips;
@@ -466,9 +468,9 @@ function simulateBotPreflop(players: BotPlayer[], heroPosition: Position): {
         // This player committed chips but less than the final raise — give them a chance to respond
         const resp = simulateBotAction(p.type, p.position, true, raiseAmount, pot);
         if (resp !== 'fold') {
-          const extra = raiseAmount - p.currentBet;
+          const extra = Math.min(raiseAmount - p.currentBet, p.stack); // cap at remaining stack
           pot += extra;
-          updated[i] = { ...p, currentBet: raiseAmount, stack: Math.round(Math.max(0, p.stack - extra) * 10) / 10 };
+          updated[i] = { ...p, currentBet: p.currentBet + extra, stack: Math.round(Math.max(0, p.stack - extra) * 10) / 10 };
         } else {
           updated[i] = { ...p, action: 'fold', isActive: false };
         }
@@ -509,8 +511,9 @@ function simulateOtherPlayers(
     if (isBet && openBet) {
       const resp = simulateBotAction(player.type, pos, true, openBet.betBB, pot);
       if (resp !== 'fold') {
-        actions[pos] = { action: 'call', betBB: openBet.betBB };
-        potAdded += openBet.betBB;
+        const callAmt = Math.min(openBet.betBB, player.stack); // cap at remaining stack
+        actions[pos] = { action: 'call', betBB: callAmt };
+        potAdded += callAmt;
         remainingActive.push(pos);
       } else {
         actions[pos] = { action: 'fold', betBB: 0 };
@@ -628,9 +631,9 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       const callTotal = state.actionCtx.facingRaise ? state.actionCtx.raiseAmount : 1;
       // heroBet = extra chips hero adds (total - already posted)
       const heroBet = heroAction === 'raise'
-        ? Math.max(0, raiseBB - heroAlreadyIn)
+        ? Math.min(Math.max(0, raiseBB - heroAlreadyIn), state.heroStack)
         : heroAction === 'call'
-          ? Math.max(0, callTotal - heroAlreadyIn)
+          ? Math.min(Math.max(0, callTotal - heroAlreadyIn), state.heroStack)
           : 0;
       let preflopPot = state.pot + heroBet;
 
@@ -654,7 +657,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           if (facingAmt > alreadyIn) {
             const resp = simulateBotAction(bot.type, bot.position, facingRaiseNow, facingAmt, preflopPot);
             if (resp !== 'fold') {
-              const extra = facingAmt - alreadyIn;
+              const extra = Math.min(facingAmt - alreadyIn, bot.stack); // cap at remaining stack
               preflopPot += extra;
               extraCommits.set(bot.position, (extraCommits.get(bot.position) ?? 0) + extra);
             } else foldedInSim.add(bot.position);
@@ -669,7 +672,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           if (origRaiser) {
             const resp = simulateBotAction(origRaiser.type, origRaiser.position, true, raiseBB, preflopPot);
             if (resp !== 'fold') {
-              const extra = Math.max(0, raiseBB - state.actionCtx.raiseAmount);
+              const extra = Math.min(Math.max(0, raiseBB - state.actionCtx.raiseAmount), origRaiser.stack);
               preflopPot += extra;
               extraCommits.set(origRaiser.position, (extraCommits.get(origRaiser.position) ?? 0) + extra);
             } else foldedInSim.add(origRaiser.position);
@@ -685,7 +688,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
             if (bot.currentBet > 0) {
               const resp = simulateBotAction(bot.type, bot.position, true, raiseBB, preflopPot);
               if (resp !== 'fold') {
-                const extra = Math.max(0, raiseBB - bot.currentBet);
+                const extra = Math.min(Math.max(0, raiseBB - bot.currentBet), bot.stack);
                 preflopPot += extra;
                 extraCommits.set(bot.position, (extraCommits.get(bot.position) ?? 0) + extra);
               } else foldedInSim.add(bot.position);
@@ -764,7 +767,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         ?? getMainVillainPlayer(state);
 
       const visibleBoard = flopCards.filter(c => c.faceUp);
-      const villain = heroActsFirst
+      let villain = heroActsFirst
         ? null
         : simulateVillainPostFlop(
             flopVillainPlayer.type,
@@ -772,6 +775,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
             preflopPot, 'none',
             flopVillainPlayer.cards, visibleBoard,
           );
+      if (villain && villain.betBB > flopVillainPlayer.stack) villain = { ...villain, betBB: flopVillainPlayer.stack };
 
       // Split background bots into those who act BEFORE hero (show their chips now)
       // and those who act AFTER hero (no chips until hero acts).
@@ -823,7 +827,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       if (state.postFlopStreetsDone.includes(street)) return state;
 
       const board = state.communityCards.filter(c => c.faceUp);
-      const betBB = Math.round((betPct / 100) * state.pot * 10) / 10;
+      const betBB = Math.min(Math.round((betPct / 100) * state.pot * 10) / 10, state.heroStack);
 
       // Get villain's cards for realistic simulation
       const villainPlayer = getMainVillainPlayer(state);
@@ -832,11 +836,12 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       // ── BRANCH A: Hero (OOP) checks for the first time this street ────────
       // Villain responds — if they bet, pause so hero can fold/call/raise.
       if (state.heroActsFirst && heroAction === 'check' && state.heroCheckedStreet !== street) {
-        const villainResp = simulateVillainPostFlop(
+        let villainResp = simulateVillainPostFlop(
           state.mainVillainType,
           analyzeBoardTexture(board).texture,
           state.pot, 'check', villainCards, board,
         );
+        if (villainResp.betBB > villainPlayer.stack) villainResp = { ...villainResp, betBB: villainPlayer.stack };
 
         if (villainResp.action === 'bet') {
           // Simulate other active players' response to villain's bet
@@ -999,6 +1004,10 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         villainFinalResponse = villainOpenAction;
       }
 
+      // Cap villain's bet/raise at their remaining stack
+      if (villainFinalResponse.betBB > villainPlayer.stack) {
+        villainFinalResponse = { ...villainFinalResponse, betBB: villainPlayer.stack };
+      }
       const villainFolded = villainFinalResponse.action === 'fold';
 
       // ── Pot calculation ─────────────────────────────────────────────────
@@ -1111,12 +1120,13 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         const turnHeroActsFirst = !firstBotBeforeHeroT;
         const turnVillainPos: Position = firstBotBeforeHeroT ?? state.mainVillainPosition;
         const turnVillainPlayer = state.players.find(p => p.position === turnVillainPos) ?? villainPlayer;
-        const villain = turnHeroActsFirst
+        let villain = turnHeroActsFirst
           ? null
           : simulateVillainPostFlop(
               turnVillainPlayer.type, analyzeBoardTexture(board).texture,
               state.pot, 'none', turnVillainPlayer.cards, board,
             );
+        if (villain && villain.betBB > turnVillainPlayer.stack) villain = { ...villain, betBB: turnVillainPlayer.stack };
         const bgPosTurn = state.handActivePlayers.filter(p => p !== turnVillainPos);
         const bgTurnBefore = turnHeroActsFirst ? [] : bgPosTurn.filter(p => POSTFLOP_ORDER.indexOf(p) < heroIdxT);
         const bgTurnAfter  = turnHeroActsFirst ? bgPosTurn : bgPosTurn.filter(p => POSTFLOP_ORDER.indexOf(p) > heroIdxT);
@@ -1157,12 +1167,13 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         const riverHeroActsFirst = !firstBotBeforeHeroR;
         const riverVillainPos: Position = firstBotBeforeHeroR ?? state.mainVillainPosition;
         const riverVillainPlayer = state.players.find(p => p.position === riverVillainPos) ?? villainPlayer;
-        const villain = riverHeroActsFirst
+        let villain = riverHeroActsFirst
           ? null
           : simulateVillainPostFlop(
               riverVillainPlayer.type, analyzeBoardTexture(board).texture,
               state.pot, 'none', riverVillainPlayer.cards, board,
             );
+        if (villain && villain.betBB > riverVillainPlayer.stack) villain = { ...villain, betBB: riverVillainPlayer.stack };
         const bgPosRiver = state.handActivePlayers.filter(p => p !== riverVillainPos);
         const bgRiverBefore = riverHeroActsFirst ? [] : bgPosRiver.filter(p => POSTFLOP_ORDER.indexOf(p) < heroIdxR);
         const bgRiverAfter  = riverHeroActsFirst ? bgPosRiver : bgPosRiver.filter(p => POSTFLOP_ORDER.indexOf(p) > heroIdxR);
