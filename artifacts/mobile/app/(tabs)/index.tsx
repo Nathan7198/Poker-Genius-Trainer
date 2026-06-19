@@ -192,8 +192,9 @@ export default function PlayScreen() {
             style={[styles.diffBtn, { backgroundColor: diffColors[state.difficulty] + '22', borderColor: diffColors[state.difficulty] + '66' }]}
             onPress={() => setShowDifficultyPicker(!showDifficultyPicker)}
           >
+            <Text style={styles.diffBtnLabel}>DIFFICULTY</Text>
             <Text style={[styles.diffBtnText, { color: diffColors[state.difficulty] }]}>
-              {state.difficulty.slice(0, 3).toUpperCase()}
+              {state.difficulty}
             </Text>
           </TouchableOpacity>
         </View>
@@ -377,8 +378,9 @@ const styles = StyleSheet.create({
   potText: { fontSize: 10, fontWeight: '700' },
   modeBtn: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1, borderColor: '#333', backgroundColor: '#181818' },
   modeBtnText: { fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
-  diffBtn: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1 },
-  diffBtnText: { fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
+  diffBtn: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1, alignItems: 'center', minWidth: 90 },
+  diffBtnLabel: { fontSize: 8, fontWeight: '700', letterSpacing: 1.5, color: '#888', marginBottom: 1 },
+  diffBtnText: { fontSize: 12, fontWeight: '800', letterSpacing: 0.3 },
   diffPicker: {
     position: 'absolute', right: 12, top: 62, zIndex: 100,
     borderRadius: 12, borderWidth: 1, width: 280,
