@@ -1184,9 +1184,10 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 
       if (state.phase === 'river') {
         const board = state.communityCards.filter(c => c.faceUp);
-        // Compare hero against ALL active players — pick the one who beats hero (if any),
-        // otherwise the one with the best hand overall.
-        const activePlayers = state.players.filter(p => p.isActive);
+        // Compare hero against ALL players still in the hand after the river.
+        // Use handActivePlayers (not p.isActive) — post-flop folds are tracked there.
+        const activeSet = new Set(state.handActivePlayers as string[]);
+        const activePlayers = state.players.filter(p => activeSet.has(p.position));
         let showdownVillain = activePlayers[0] ?? villainPlayer;
         let showdownResult: 'hero' | 'villain' | 'tie' = 'hero';
         for (const player of activePlayers) {
@@ -1203,7 +1204,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           }
         }
         const revealedPlayers = state.players.map(p =>
-          p.isActive
+          activeSet.has(p.position)
             ? { ...p, cards: p.cards.map(c => ({ ...c, faceUp: true })) }
             : p
         );
