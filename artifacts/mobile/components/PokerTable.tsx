@@ -203,7 +203,7 @@ const styles = StyleSheet.create({
   },
   potBadge: {
     position: 'absolute',
-    top: '22%',
+    top: '35%',
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.55)',
@@ -221,7 +221,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     position: 'absolute',
-    top: '46%',
+    top: '55%',
   },
   preflopHint: {
     paddingHorizontal: 16,
