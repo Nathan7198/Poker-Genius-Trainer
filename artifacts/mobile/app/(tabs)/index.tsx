@@ -181,15 +181,36 @@ export default function PlayScreen() {
               <Text style={[styles.streetBadgeText, { color: colors.gold }]}>{streetBadge}</Text>
             </View>
           )}
-          <TouchableOpacity
-            style={[styles.modeBtn, { borderColor: '#33333366' }]}
-            onPress={() => { setShowModePicker(!showModePicker); setShowDifficultyPicker(false); }}
-          >
-            <Text style={styles.modeBtnLabel}>MODE</Text>
-            <Text style={[styles.modeBtnText, { color: isPreflopMode ? colors.goldLight : colors.foreground }]}>
-              {isPreflopMode ? 'Pre Flop' : 'Full Hands'}
-            </Text>
-          </TouchableOpacity>
+          <View style={{ position: 'relative' }}>
+            <TouchableOpacity
+              style={[styles.modeBtn, { borderColor: '#33333366' }]}
+              onPress={() => { setShowModePicker(!showModePicker); setShowDifficultyPicker(false); }}
+            >
+              <Text style={styles.modeBtnLabel}>MODE</Text>
+              <Text style={[styles.modeBtnText, { color: isPreflopMode ? colors.goldLight : colors.foreground }]}>
+                {isPreflopMode ? 'Pre Flop' : 'Full Hands'}
+              </Text>
+            </TouchableOpacity>
+            {showModePicker && (
+              <View style={[styles.modePicker, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                {([['full', 'Full Hands'], ['preflop', 'Pre Flop']] as const).map(([val, label]) => {
+                  const isSelected = state.trainingMode === val;
+                  return (
+                    <TouchableOpacity
+                      key={val}
+                      style={[styles.modeOption, isSelected && { backgroundColor: '#A8882A18' }]}
+                      onPress={() => { setTrainingMode(val); setShowModePicker(false); }}
+                    >
+                      <View style={styles.modeOptionRow}>
+                        <Feather name="check" size={13} color={isSelected ? colors.goldLight : 'transparent'} style={{ marginRight: 6 }} />
+                        <Text style={[styles.modeOptionText, { color: isSelected ? colors.goldLight : colors.foreground }]}>{label}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
+          </View>
           <TouchableOpacity
             style={[styles.diffBtn, { backgroundColor: diffColors[state.difficulty] + '22', borderColor: diffColors[state.difficulty] + '66' }]}
             onPress={() => { setShowDifficultyPicker(!showDifficultyPicker); setShowModePicker(false); }}
@@ -201,27 +222,6 @@ export default function PlayScreen() {
           </TouchableOpacity>
         </View>
       </View>
-
-      {/* Mode picker */}
-      {showModePicker && (
-        <View style={[styles.modePicker, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          {([['full', 'Full Hands'], ['preflop', 'Pre Flop']] as const).map(([val, label]) => {
-            const isSelected = state.trainingMode === val;
-            return (
-              <TouchableOpacity
-                key={val}
-                style={[styles.modeOption, isSelected && { backgroundColor: '#A8882A18' }]}
-                onPress={() => { setTrainingMode(val); setShowModePicker(false); }}
-              >
-                <View style={styles.modeOptionRow}>
-                  <Feather name="check" size={13} color={isSelected ? colors.goldLight : 'transparent'} style={{ marginRight: 6 }} />
-                  <Text style={[styles.modeOptionText, { color: isSelected ? colors.goldLight : colors.foreground }]}>{label}</Text>
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      )}
 
       {/* Difficulty picker */}
       {showDifficultyPicker && (
@@ -402,7 +402,7 @@ const styles = StyleSheet.create({
   modeBtn: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1, backgroundColor: '#181818', alignItems: 'center', minWidth: 90 },
   modeBtnLabel: { fontSize: 8, fontWeight: '700', letterSpacing: 1.5, color: '#888', marginBottom: 1 },
   modeBtnText: { fontSize: 12, fontWeight: '800', letterSpacing: 0.3 },
-  modePicker: { position: 'absolute', left: 12, top: 62, zIndex: 100, borderRadius: 10, borderWidth: 1, paddingVertical: 4, minWidth: 130, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 8 },
+  modePicker: { position: 'absolute', left: 0, top: '100%', marginTop: 4, zIndex: 100, borderRadius: 10, borderWidth: 1, paddingVertical: 4, minWidth: 130, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 8 },
   modeOption: { paddingHorizontal: 12, paddingVertical: 10, borderRadius: 6 },
   modeOptionRow: { flexDirection: 'row', alignItems: 'center' },
   modeOptionText: { fontSize: 13, fontWeight: '700' },
