@@ -10,7 +10,7 @@ import { useGame } from '@/context/GameContext';
 import {
   POSITIONS, Position, POSITION_LABELS, POSITION_COLORS, POSITION_DESCRIPTIONS,
   PLAYER_TYPE_INFO, PlayerType, DIFFICULTIES, DIFFICULTY_DESCRIPTIONS,
-  calcPotOdds, StackTier, STACK_TIER_LABELS, STACK_TIER_DESCRIPTIONS,
+  calcPotOdds, StackTier, STACK_TIER_LABELS, STACK_TIER_DESCRIPTIONS, getStackTier,
 } from '@/constants/pokerData';
 
 type Tab = 'ranges'|'positions'|'players'|'theory';
@@ -44,8 +44,9 @@ export default function LearnScreen() {
       if (state.phase !== 'idle') {
         setActiveTab('ranges');
         setSelectedPosition(state.heroPosition);
+        setSelectedStackTier(getStackTier(state.heroStack));
       }
-    }, [state.phase, state.heroPosition])
+    }, [state.phase, state.heroPosition, state.heroStack])
   );
 
   const topPad = Platform.OS === 'web' ? insets.top + 10 : insets.top + 4;
