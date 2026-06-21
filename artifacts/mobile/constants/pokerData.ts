@@ -952,3 +952,57 @@ export function simulateBotGTOAction(
 
   return 'fold';
 }
+
+// GTO-correct post-flop simulation: balanced frequencies and standard sizing.
+// No player-type biases — pure hand-strength + board-texture logic.
+export function simulateVillainGTOPostFlop(
+  texture: BoardTexture,
+  potBB: number,
+  heroAction: 'none' | 'check' | 'bet' | 'raise',
+  villainCards: Card[],
+  board: Card[],
+): { action: 'fold'|'check'|'call'|'bet'|'raise'; betPct: number; betBB: number } {
+  const rand = Math.random();
+  const handRank = board.length >= 3 ? evaluateMadeHand(villainCards, board).rank : 0;
+  const textureAdj = texture === 'wet' ? 0.80 : texture === 'monotone' ? 0.75 : 1.0;
+
+  if (heroAction === 'none' || heroAction === 'check') {
+    // GTO c-bet frequency: rises sharply with hand strength, falls on connected boards
+    const betFreq = Math.min((
+      handRank >= 5 ? 0.88 :
+      handRank === 4 ? 0.72 :
+      handRank === 3 ? 0.58 :
+      handRank === 2 ? 0.38 :
+      0.22 // balanced bluff frequency
+    ) * textureAdj, 0.92);
+
+    if (rand < betFreq) {
+      // GTO sizing: big with strong hands, small with bluffs/thin value
+      const betPct = handRank >= 4 ? 66 : handRank >= 2 ? 50 : 33;
+      const betBB = Math.max(0.5, Math.round((betPct / 100) * potBB * 10) / 10);
+      return { action: 'bet', betPct, betBB };
+    }
+    return { action: 'check', betPct: 0, betBB: 0 };
+  }
+
+  // Responding to hero bet/raise — GTO defense frequencies by hand-rank bucket
+  const bucket: 0|1|2|3 = handRank <= 1 ? 0 : handRank === 2 ? 1 : handRank === 3 ? 2 : 3;
+  const foldProbs: [number, number, number, number] =
+    heroAction === 'raise' ? [0.82, 0.52, 0.18, 0.04] : [0.68, 0.32, 0.08, 0.01];
+  const raiseProbs: [number, number, number, number] =
+    heroAction === 'raise' ? [0.00, 0.00, 0.00, 0.00] : [0.00, 0.05, 0.20, 0.42];
+
+  const foldProb = foldProbs[bucket];
+  const raiseProb = raiseProbs[bucket];
+
+  if (rand < foldProb) return { action: 'fold', betPct: 0, betBB: 0 };
+
+  if (heroAction === 'bet' && rand < foldProb + raiseProb) {
+    // GTO raise sizing: 75-100% of pot (balanced, not exploitatively large)
+    const raisePct = 75 + Math.floor(Math.random() * 26);
+    const raiseBB = Math.max(1, Math.round((raisePct / 100) * potBB * 10) / 10);
+    return { action: 'raise', betPct: raisePct, betBB: raiseBB };
+  }
+
+  return { action: 'call', betPct: 0, betBB: 0 };
+}

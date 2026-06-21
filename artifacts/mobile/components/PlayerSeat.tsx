@@ -50,13 +50,20 @@ export default function PlayerSeat({ player, showCards }: PlayerSeatProps) {
         ))}
       </View>
 
-      {/* Player type badge */}
-      <View style={[styles.typeBadge, { backgroundColor: typeInfo.color + '22', borderColor: typeInfo.color + '55' }]}>
-        <Feather name={(TYPE_ICONS[player.type] ?? 'user') as any} size={7} color={typeInfo.color} />
-        <Text style={[styles.typeText, { color: typeInfo.color }]} numberOfLines={1}>
-          {typeInfo.shortLabel} · {typeInfo.vpip}%
-        </Text>
-      </View>
+      {/* Player type badge — GTO mode shows a neutral GTO label instead */}
+      {state.trainingMode === 'gto' ? (
+        <View style={[styles.typeBadge, { backgroundColor: '#27AE6022', borderColor: '#27AE6055' }]}>
+          <Feather name="target" size={7} color="#27AE60" />
+          <Text style={[styles.typeText, { color: '#27AE60' }]} numberOfLines={1}>GTO</Text>
+        </View>
+      ) : (
+        <View style={[styles.typeBadge, { backgroundColor: typeInfo.color + '22', borderColor: typeInfo.color + '55' }]}>
+          <Feather name={(TYPE_ICONS[player.type] ?? 'user') as any} size={7} color={typeInfo.color} />
+          <Text style={[styles.typeText, { color: typeInfo.color }]} numberOfLines={1}>
+            {typeInfo.shortLabel} · {typeInfo.vpip}%
+          </Text>
+        </View>
+      )}
 
       {/* Player info */}
       <View style={[styles.info, { backgroundColor: colors.card }]}>
