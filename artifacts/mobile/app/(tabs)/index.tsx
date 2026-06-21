@@ -28,13 +28,14 @@ function cardLabel(rank: string, suit: string) {
 }
 
 export default function PlayScreen() {
-  const { state, startNewHand, setDifficulty, setTrainingMode, setTableSize, goIdle } = useGame();
+  const { state, startNewHand, setDifficulty, setTrainingMode, setTableSize, setGameFormat, goIdle } = useGame();
   const { logHandHistory, recordHandResult } = useStats();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const [showDifficultyPicker, setShowDifficultyPicker] = React.useState(false);
   const [showModePicker, setShowModePicker] = React.useState(false);
   const [showTablePicker, setShowTablePicker] = React.useState(false);
+  const [showFormatPicker, setShowFormatPicker] = React.useState(false);
   const [expandCustomSizes, setExpandCustomSizes] = React.useState(false);
   const [showHandReport, setShowHandReport] = React.useState(false);
   const isPreflopMode = state.trainingMode === 'preflop';
@@ -210,7 +211,7 @@ export default function PlayScreen() {
           >
             <TouchableOpacity
               style={[styles.modeBtn, { borderColor: '#33333366' }]}
-              onPress={() => { setShowModePicker(!showModePicker); setShowDifficultyPicker(false); setShowTablePicker(false); }}
+              onPress={() => { setShowModePicker(!showModePicker); setShowDifficultyPicker(false); setShowTablePicker(false); setShowFormatPicker(false); }}
             >
               <Text style={styles.modeBtnLabel}>MODE</Text>
               <Text style={[styles.modeBtnText, {
@@ -228,14 +229,26 @@ export default function PlayScreen() {
           </View>
           <TouchableOpacity
             style={[styles.tableBtn, { borderColor: isCustomSize ? colors.goldLight + '66' : '#33333366', backgroundColor: isCustomSize ? '#A8882A15' : '#181818' }]}
-            onPress={() => { setShowTablePicker(!showTablePicker); setShowModePicker(false); setShowDifficultyPicker(false); }}
+            onPress={() => { setShowTablePicker(!showTablePicker); setShowModePicker(false); setShowDifficultyPicker(false); setShowFormatPicker(false); }}
           >
             <Text style={styles.tableBtnLabel}>TABLE</Text>
             <Text style={[styles.tableBtnText, { color: isCustomSize ? colors.goldLight : colors.foreground }]}>{tableBtnText}</Text>
           </TouchableOpacity>
           <TouchableOpacity
+            style={[styles.formatBtn, {
+              borderColor: state.gameFormat === 'tournament' ? '#E5C76B66' : '#33333366',
+              backgroundColor: state.gameFormat === 'tournament' ? '#A8882A15' : '#181818',
+            }]}
+            onPress={() => { setShowFormatPicker(!showFormatPicker); setShowModePicker(false); setShowTablePicker(false); setShowDifficultyPicker(false); }}
+          >
+            <Text style={styles.formatBtnLabel}>FORMAT</Text>
+            <Text style={[styles.formatBtnText, { color: state.gameFormat === 'tournament' ? colors.goldLight : colors.foreground }]}>
+              {state.gameFormat === 'tournament' ? 'Tourn.' : 'Cash'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
             style={[styles.diffBtn, { backgroundColor: diffColors[state.difficulty] + '22', borderColor: diffColors[state.difficulty] + '66' }]}
-            onPress={() => { setShowDifficultyPicker(!showDifficultyPicker); setShowModePicker(false); setShowTablePicker(false); }}
+            onPress={() => { setShowDifficultyPicker(!showDifficultyPicker); setShowModePicker(false); setShowTablePicker(false); setShowFormatPicker(false); }}
           >
             <Text style={styles.diffBtnLabel}>DIFFICULTY</Text>
             <Text style={[styles.diffBtnText, { color: diffColors[state.difficulty] }]}>
@@ -260,6 +273,31 @@ export default function PlayScreen() {
                   <Feather name="check" size={13} color={isSelected ? colors.goldLight : 'transparent'} style={{ marginRight: 6 }} />
                   <Text style={[styles.modeOptionText, { color: isSelected ? colors.goldLight : colors.foreground }]}>{label}</Text>
                 </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      )}
+
+      {/* Format picker */}
+      {showFormatPicker && (
+        <View style={[styles.formatPicker, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          {([
+            ['cash', 'Cash Games', 'Start every hand at 100BB. No persistent stacks.'],
+            ['tournament', 'Tournament', 'Stacks carry over between hands. Reach 0BB and you\'re out.'],
+          ] as const).map(([fmt, label, desc]) => {
+            const sel = state.gameFormat === fmt;
+            return (
+              <TouchableOpacity
+                key={fmt}
+                style={[styles.formatOption, sel && { backgroundColor: '#A8882A18' }]}
+                onPress={() => { setGameFormat(fmt); setShowFormatPicker(false); }}
+              >
+                <View style={styles.formatOptionRow}>
+                  <Feather name="check" size={13} color={sel ? colors.goldLight : 'transparent'} style={{ marginRight: 6 }} />
+                  <Text style={[styles.formatOptionName, { color: sel ? colors.goldLight : colors.foreground }]}>{label}</Text>
+                </View>
+                <Text style={[styles.formatOptionDesc, { color: colors.mutedForeground }]}>{desc}</Text>
               </TouchableOpacity>
             );
           })}
@@ -386,8 +424,34 @@ export default function PlayScreen() {
         {isIdle && (
           state.trainingMode === 'custom' ? (
             <CustomSetup />
+          ) : state.gameFormat === 'tournament' && state.tournamentStacks.hero <= 0 ? (
+            <View style={styles.centerActions}>
+              <View style={[styles.eliminatedBadge, { backgroundColor: '#E74C3C18', borderColor: '#E74C3C55' }]}>
+                <Text style={[styles.eliminatedTitle, { color: '#E74C3C' }]}>ELIMINATED</Text>
+                <Text style={[styles.eliminatedSub, { color: colors.mutedForeground }]}>You ran out of chips. Start a new tournament to play again.</Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.dealBtn, { backgroundColor: '#444' }]}
+                onPress={() => { setGameFormat('tournament'); }}
+              >
+                <Text style={[styles.dealBtnText, { color: '#CCC' }]}>NEW TOURNAMENT</Text>
+              </TouchableOpacity>
+            </View>
           ) : (
             <View style={styles.centerActions}>
+              {state.gameFormat === 'tournament' && (
+                <View style={[styles.tourneyChips, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <Text style={[styles.tourneyChipsLabel, { color: colors.mutedForeground }]}>YOUR TOURNAMENT STACK</Text>
+                  <Text style={[styles.tourneyChipsValue, { color: colors.goldLight }]}>
+                    {Number.isInteger(state.tournamentStacks.hero) ? state.tournamentStacks.hero : state.tournamentStacks.hero.toFixed(1)} BB
+                  </Text>
+                  {state.eliminatedPositions.length > 0 && (
+                    <Text style={[styles.tourneyElimText, { color: colors.mutedForeground }]}>
+                      Eliminated: {state.eliminatedPositions.join(', ')}
+                    </Text>
+                  )}
+                </View>
+              )}
               <TouchableOpacity style={[styles.dealBtn, { backgroundColor: colors.gold }]} onPress={handleNewHand}>
                 <Text style={[styles.dealBtnText, { color: '#0A0A0A' }]}>DEAL CARDS</Text>
               </TouchableOpacity>
@@ -533,6 +597,31 @@ const styles = StyleSheet.create({
   customSizes: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: 12, paddingBottom: 10 },
   customSizeBtn: { width: 36, height: 36, borderRadius: 8, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   customSizeText: { fontSize: 14, fontWeight: '800' },
+  formatBtn: { paddingHorizontal: 8, paddingVertical: 5, borderRadius: 8, borderWidth: 1, alignItems: 'center', minWidth: 58 },
+  formatBtnLabel: { fontSize: 8, fontWeight: '700', letterSpacing: 1.5, color: '#888', marginBottom: 1 },
+  formatBtnText: { fontSize: 12, fontWeight: '800', letterSpacing: 0.3 },
+  formatPicker: {
+    position: 'absolute', right: 12, top: 62, zIndex: 100,
+    borderRadius: 12, borderWidth: 1, width: 260,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5, shadowRadius: 8, elevation: 10,
+  },
+  formatOption: { padding: 12, borderRadius: 8 },
+  formatOptionRow: { flexDirection: 'row', alignItems: 'center' },
+  formatOptionName: { fontSize: 14, fontWeight: '700' },
+  formatOptionDesc: { fontSize: 11, marginTop: 2, lineHeight: 15 },
+  tourneyChips: {
+    borderRadius: 12, borderWidth: 1, paddingVertical: 12, paddingHorizontal: 20,
+    alignItems: 'center', minWidth: 200,
+  },
+  tourneyChipsLabel: { fontSize: 9, fontWeight: '700', letterSpacing: 1.5, marginBottom: 4 },
+  tourneyChipsValue: { fontSize: 28, fontWeight: '900', letterSpacing: 0.5 },
+  tourneyElimText: { fontSize: 10, marginTop: 6, fontStyle: 'italic' },
+  eliminatedBadge: {
+    borderRadius: 12, borderWidth: 1.5, paddingVertical: 14, paddingHorizontal: 20, alignItems: 'center', gap: 6,
+  },
+  eliminatedTitle: { fontSize: 22, fontWeight: '900', letterSpacing: 2 },
+  eliminatedSub: { fontSize: 12, textAlign: 'center', lineHeight: 17 },
   scroll: { flex: 1 },
   scrollContent: { paddingBottom: 8, paddingTop: 8 },
   actionTrail: { marginHorizontal: 12, marginTop: 6 },

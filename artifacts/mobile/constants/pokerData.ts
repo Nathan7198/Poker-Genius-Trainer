@@ -914,39 +914,188 @@ export function simulateBotAction(
   }
 }
 
+// ── Stack-Size Adjusted GTO Ranges ─────────────────────────────────────────
+
+export type StackTier = 'deep' | 'mid' | 'short' | 'push-fold';
+
+export function getStackTier(effectiveBB: number): StackTier {
+  if (effectiveBB >= 75) return 'deep';
+  if (effectiveBB >= 40) return 'mid';
+  if (effectiveBB >= 20) return 'short';
+  return 'push-fold';
+}
+
+export const STACK_TIER_LABELS: Record<StackTier, string> = {
+  'deep':      '75BB+  (Deep Stacks)',
+  'mid':       '40–75BB  (Mid Stacks)',
+  'short':     '20–40BB  (Short Stacks)',
+  'push-fold': '<20BB  (Push-Fold)',
+};
+
+export const STACK_TIER_DESCRIPTIONS: Record<StackTier, string> = {
+  'deep':      'Standard full GTO ranges. Implied-odds hands (suited connectors, small pairs) have full value with chips behind.',
+  'mid':       'Trim the bottom of each range. Small pairs and low suited connectors lose implied-odds value; focus on high-equity hands.',
+  'short':     'Speculative hands are near-worthless. Play premium pairs, strong broadway, and top-pair-or-better equity hands only.',
+  'push-fold': 'Open-shove or fold — no post-flop play. Select hands with strong all-in equity vs a typical calling range.',
+};
+
+// Tier-specific opening ranges ------------------------------------------------
+
+// Short-stack core: pairs 77+, strong aces (all suited), top broadways, strong connectors
+const SHORT_CORE = new Set([
+  'AA','KK','QQ','JJ','TT','99','88','77',
+  'AKs','AQs','AJs','ATs','A9s','A8s','A7s','A6s','A5s','A4s','A3s','A2s',
+  'KQs','KJs','KTs',
+  'QJs','JTs','T9s',
+  'AKo','AQo','AJo','ATo',
+]);
+
+// MID (40-75BB): slightly wider than SHORT_CORE per position
+const HJ_MID_EXTRA = ['66','55','K9s','K8s','K7s','Q8s','J7s','T7s','97s','86s','A9o','A8o','KTo','QJo'];
+const HJ_MID  = new Set([...SHORT_CORE, ...HJ_MID_EXTRA]);
+const CO_MID  = new Set([...HJ_MID, '44','33','22','Q9s','Q8s','J8s','J9s','T8s','98s','87s','76s','65s','A7o','A6o','KJo','QTo','JTo']);
+const BTN_MID = new Set([...CO_MID, 'K6s','K5s','Q7s','Q6s','J6s','T6s','96s','85s','75s','64s','53s','43s','A5o','A4o','A3o','K9o','K8o','Q9o']);
+const SB_MID  = new Set([...BTN_MID]);
+
+// SHORT (20-40BB): tight ranges, speculative hands removed
+const CO_SHORT  = new Set([...SHORT_CORE, '66','55','K9s','K8s','Q9s','J9s','T8s','98s','87s','76s','A9o','A8o','KJo','QJo']);
+const BTN_SHORT = new Set([...CO_SHORT,   '44','33','22','K7s','Q8s','J8s','T7s','97s','86s','65s','A7o','A6o','A5o','KTo','QTo','JTo']);
+const SB_SHORT  = new Set([...CO_SHORT]);
+
+// PUSH-FOLD (<20BB): shove-or-fold ranges by position
+const PF_UTG = new Set([
+  'AA','KK','QQ','JJ','TT','99','88','77','66','55','44','33','22',
+  'AKs','AQs','AJs','ATs','A9s','A8s','A7s','A6s','A5s','A4s','A3s','A2s',
+  'KQs','KJs',
+  'AKo','AQo','AJo',
+]);
+const PF_HJ = new Set([...PF_UTG, 'KTs','K9s','QJs','JTs','T9s','KQo','ATo']);
+const PF_CO = new Set([...PF_HJ, '98s','87s','76s','K8s','QTs','J9s','T8s','KJo','KTo','A9o','A8o']);
+const PF_BTN = new Set([...PF_CO, '65s','54s','97s','86s','75s','64s','Q9s','J8s','97o','QJo','QTo','A7o','A6o','A5o','A4o','K9o']);
+const PF_SB  = new Set([...PF_BTN, '43s','53s','Q8s','T7s','96s','85s','74s','KTo','A3o','A2o','K8o','J9o']);
+
+export const STACK_GTO_RANGES: Record<StackTier, Record<Position, Set<string>>> = {
+  'deep': GTO_RANGES,
+  'mid': {
+    UTG: UTG_SET, UTG2: UTG_SET, UTG3: UTG_SET,
+    MP:  UTG_SET, HJ: HJ_MID,
+    CO:  CO_MID,  BTN: BTN_MID, SB: SB_MID, BB: new Set(),
+  },
+  'short': {
+    UTG: SHORT_CORE, UTG2: SHORT_CORE, UTG3: SHORT_CORE,
+    MP:  UTG_SET,    HJ: UTG_SET,
+    CO:  CO_SHORT,   BTN: BTN_SHORT, SB: SB_SHORT, BB: new Set(),
+  },
+  'push-fold': {
+    UTG: PF_UTG, UTG2: PF_UTG, UTG3: PF_UTG,
+    MP:  PF_UTG, HJ: PF_HJ,
+    CO:  PF_CO,  BTN: PF_BTN, SB: PF_SB, BB: new Set(),
+  },
+};
+
+// Tier-specific BB defense ranges ---------------------------------------------
+
+export const MID_BB_DEFENSE = new Set([
+  'AA','KK','QQ','JJ','TT','99','88','77','66','55','44','33','22',
+  'AKs','AQs','AJs','ATs','A9s','A8s','A7s','A6s','A5s','A4s','A3s','A2s',
+  'KQs','KJs','KTs','K9s','K8s','K7s','K6s','K5s',
+  'QJs','QTs','Q9s','Q8s','Q7s','Q6s',
+  'JTs','J9s','J8s','J7s','J6s',
+  'T9s','T8s','T7s','T6s',
+  '98s','97s','96s','95s',
+  '87s','86s','85s',
+  '76s','75s','74s',
+  '65s','64s',
+  '54s','53s',
+  '43s',
+  'AKo','AQo','AJo','ATo','A9o','A8o','A7o','A6o','A5o','A4o','A3o',
+  'KQo','KJo','KTo','K9o','K8o',
+  'QJo','QTo','Q9o',
+  'JTo','J9o',
+  'T9o','T8o',
+  '98o','87o',
+]);
+
+export const SHORT_BB_DEFENSE = new Set([
+  'AA','KK','QQ','JJ','TT','99','88','77','66','55','44','33','22',
+  'AKs','AQs','AJs','ATs','A9s','A8s','A7s','A6s','A5s','A4s','A3s','A2s',
+  'KQs','KJs','KTs','K9s',
+  'QJs','QTs','Q9s',
+  'JTs','J9s','J8s',
+  'T9s','T8s',
+  '98s','97s',
+  '87s','76s',
+  'AKo','AQo','AJo','ATo','A9o','A8o','A7o','A6o',
+  'KQo','KJo','KTo',
+  'QJo','QTo',
+  'JTo',
+]);
+
+export const PUSHFOLD_BB_DEFENSE = new Set([
+  'AA','KK','QQ','JJ','TT','99','88','77','66',
+  'AKs','AQs','AJs','ATs','A9s','A8s','A7s','A6s','A5s',
+  'KQs','KJs',
+  'QJs','JTs',
+  'AKo','AQo','AJo','ATo','A9o',
+  'KQo',
+]);
+
+export const STACK_BB_DEFENSE: Record<StackTier, Set<string>> = {
+  'deep':      BB_DEFENSE,
+  'mid':       MID_BB_DEFENSE,
+  'short':     SHORT_BB_DEFENSE,
+  'push-fold': PUSHFOLD_BB_DEFENSE,
+};
+
+// 3-bet value range at short stacks — no bluffs, only premium value
+export const SHORT_THREEBET_VALUE = new Set(['AA','KK','QQ','JJ','TT','AKs','AKo','AQs','AQo']);
+
 // GTO-correct preflop action: uses the bot's actual cards vs position ranges.
 // No limping, no random variance — pure range adherence.
+// effectiveStack: the smaller of hero/villain stacks; adjusts range and action type.
 export function simulateBotGTOAction(
   cards: Card[],
   position: Position,
   facingRaise: boolean,
   raiseAmount: number,
   potSize: number,
+  effectiveStack = 100,
 ): 'fold'|'call'|'raise' {
   if (cards.length < 2) return 'fold';
   const notation = getHandNotation(cards[0], cards[1]);
+  const tier = getStackTier(effectiveStack);
+  const ranges = STACK_GTO_RANGES[tier];
+  const bbDef  = STACK_BB_DEFENSE[tier];
+  const threebetVal = (tier === 'short' || tier === 'push-fold') ? SHORT_THREEBET_VALUE : THREEBET_VALUE;
 
   if (!facingRaise) {
-    // GTO opening: raise if in range, fold otherwise — no limping ever
-    return GTO_RANGES[position].has(notation) ? 'raise' : 'fold';
+    return ranges[position].has(notation) ? 'raise' : 'fold';
   }
 
-  // Facing a raise — BB defends the widest (already has 1BB invested)
   if (position === 'BB') {
-    if (THREEBET_VALUE.has(notation)) return 'raise';
-    if (BB_DEFENSE.has(notation)) return 'call';
+    if (threebetVal.has(notation)) return 'raise';
+    if (bbDef.has(notation)) return 'call';
     return 'fold';
   }
 
-  // All other positions: 3-bet premium value, 3-bet bluff some, cold-call in-range
-  // hands that have the equity to justify it, fold everything else
+  // Short/push-fold: no bluff 3-bets, tighter cold-call
+  if (tier === 'short' || tier === 'push-fold') {
+    if (threebetVal.has(notation)) return 'raise';
+    if (ranges[position].has(notation)) {
+      const equity = getEquity(notation);
+      const odds = calcPotOdds(raiseAmount, potSize);
+      if (equity > odds + 8) return 'call'; // tighter equity threshold
+    }
+    return 'fold';
+  }
+
+  // Deep / mid: standard 3-bet/bluff/cold-call logic
   if (THREEBET_VALUE.has(notation)) return 'raise';
   if (THREEBET_BLUFF.has(notation) && GTO_RANGES[position].has(notation)) return 'raise';
 
   if (GTO_RANGES[position].has(notation)) {
     const equity = getEquity(notation);
     const odds = calcPotOdds(raiseAmount, potSize);
-    // Only cold-call when we have a meaningful equity edge over the pot odds
     if (equity > odds + 5) return 'call';
   }
 

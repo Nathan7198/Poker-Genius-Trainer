@@ -1,6 +1,11 @@
 import React, { useMemo } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
-import { Position, GRID_RANKS, getGridCell, GTO_RANGES, BB_DEFENSE, THREEBET_VALUE, THREEBET_BLUFF } from '@/constants/pokerData';
+import {
+  Position, GRID_RANKS, getGridCell,
+  GTO_RANGES, BB_DEFENSE, THREEBET_VALUE, THREEBET_BLUFF,
+  STACK_GTO_RANGES, STACK_BB_DEFENSE, SHORT_THREEBET_VALUE,
+  StackTier,
+} from '@/constants/pokerData';
 import { useColors } from '@/hooks/useColors';
 
 interface RangeGridProps {
@@ -8,28 +13,35 @@ interface RangeGridProps {
   highlightHand?: string;
   showLegend?: boolean;
   compact?: boolean;
+  stackTier?: StackTier;
 }
 
-export default function RangeGrid({ position, highlightHand, showLegend = true, compact = false }: RangeGridProps) {
+export default function RangeGrid({ position, highlightHand, showLegend = true, compact = false, stackTier }: RangeGridProps) {
   const colors = useColors();
   const { width } = useWindowDimensions();
   const cellSize = compact ? Math.floor((width - 40) / 13) - 1 : Math.floor((width - 32) / 13) - 1;
 
-  // BB doesn't open — show its defense range (what it plays vs a raise) instead
-  const range = position === 'BB' ? BB_DEFENSE : GTO_RANGES[position];
+  const range = stackTier
+    ? (position === 'BB' ? STACK_BB_DEFENSE[stackTier] : STACK_GTO_RANGES[stackTier][position])
+    : (position === 'BB' ? BB_DEFENSE : GTO_RANGES[position]);
+
+  const threebetValue = stackTier === 'push-fold' ? new Set<string>()
+    : stackTier === 'short' ? SHORT_THREEBET_VALUE
+    : THREEBET_VALUE;
+  const threebetBluff = (stackTier === 'short' || stackTier === 'push-fold') ? new Set<string>() : THREEBET_BLUFF;
 
   const cells = useMemo(() => {
     return GRID_RANKS.map((_, row) =>
       GRID_RANKS.map((_, col) => {
         const { hand, type } = getGridCell(row, col);
         const inOpen = range.has(hand);
-        const in3bValue = THREEBET_VALUE.has(hand);
-        const in3bBluff = THREEBET_BLUFF.has(hand);
+        const in3bValue = threebetValue.has(hand);
+        const in3bBluff = threebetBluff.has(hand);
         const isHighlighted = hand === highlightHand;
         return { hand, type, inOpen, in3bValue, in3bBluff, isHighlighted };
       })
     );
-  }, [position, highlightHand]);
+  }, [position, highlightHand, stackTier]);
 
   function getCellBg(inOpen: boolean, in3bValue: boolean, in3bBluff: boolean, isHighlighted: boolean): string {
     if (isHighlighted) return '#FFD700';
@@ -96,9 +108,9 @@ export default function RangeGrid({ position, highlightHand, showLegend = true, 
       {/* Legend */}
       {showLegend && (
         <View style={styles.legend}>
-          <LegendItem color="#1A5E34" label={position === 'BB' ? 'Defend Range' : 'Open Range'} />
-          <LegendItem color="#8B1A1A" label="3-Bet Value" />
-          <LegendItem color="#4A1A6B" label="3-Bet Bluff" />
+          <LegendItem color="#1A5E34" label={position === 'BB' ? 'Defend Range' : stackTier === 'push-fold' ? 'Shove Range' : 'Open Range'} />
+          {threebetValue.size > 0 && <LegendItem color="#8B1A1A" label="3-Bet Value" />}
+          {threebetBluff.size > 0 && <LegendItem color="#4A1A6B" label="3-Bet Bluff" />}
           <LegendItem color="#111E13" label="Fold" />
           {highlightHand && <LegendItem color="#FFD700" label={`Your Hand (${highlightHand})`} />}
         </View>
@@ -106,7 +118,7 @@ export default function RangeGrid({ position, highlightHand, showLegend = true, 
 
       <View style={[styles.statsRow, { borderTopColor: colors.border }]}>
         <Text style={[styles.statsText, { color: colors.mutedForeground }]}>
-          {position === 'BB' ? 'Defense Range' : 'Opening Range'}:{' '}
+          {position === 'BB' ? 'Defense Range' : stackTier === 'push-fold' ? 'Shove Range' : 'Opening Range'}:{' '}
           <Text style={{ color: colors.primary, fontWeight: '700' }}>{openPct}%</Text> of hands
           {' · '}{openCount} combos
         </Text>

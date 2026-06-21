@@ -10,7 +10,7 @@ import { useGame } from '@/context/GameContext';
 import {
   POSITIONS, Position, POSITION_LABELS, POSITION_COLORS, POSITION_DESCRIPTIONS,
   PLAYER_TYPE_INFO, PlayerType, DIFFICULTIES, DIFFICULTY_DESCRIPTIONS,
-  calcPotOdds,
+  calcPotOdds, StackTier, STACK_TIER_LABELS, STACK_TIER_DESCRIPTIONS,
 } from '@/constants/pokerData';
 
 type Tab = 'ranges'|'positions'|'players'|'theory';
@@ -35,6 +35,7 @@ export default function LearnScreen() {
   const { state } = useGame();
   const [activeTab, setActiveTab] = useState<Tab>('ranges');
   const [selectedPosition, setSelectedPosition] = useState<Position>('BTN');
+  const [selectedStackTier, setSelectedStackTier] = useState<StackTier>('deep');
 
   // When navigating to this tab during an active hand, jump straight to the
   // hero's current position in the Ranges view so they can check their range.
@@ -105,6 +106,35 @@ export default function LearnScreen() {
               ))}
             </ScrollView>
 
+            {/* Stack tier selector */}
+            <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>STACK SIZE</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.posRow} contentContainerStyle={{ gap: 8, paddingHorizontal: 16, paddingBottom: 8 }}>
+              {(['deep', 'mid', 'short', 'push-fold'] as StackTier[]).map(tier => {
+                const tierColors: Record<StackTier, string> = { deep: '#27AE60', mid: '#3498DB', short: '#E67E22', 'push-fold': '#E74C3C' };
+                const col = tierColors[tier];
+                const tierShort: Record<StackTier, string> = { deep: '75BB+', mid: '40–75BB', short: '20–40BB', 'push-fold': '<20BB' };
+                const sel = selectedStackTier === tier;
+                return (
+                  <TouchableOpacity
+                    key={tier}
+                    style={[styles.posChip, { backgroundColor: sel ? col : colors.secondary, borderColor: col, borderWidth: 1 }]}
+                    onPress={() => setSelectedStackTier(tier)}
+                  >
+                    <Text style={[styles.posChipText, { color: sel ? '#FFF' : col }]}>{tierShort[tier]}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            {/* Stack tier description */}
+            <View style={[styles.stackTierBadge, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Text style={[styles.stackTierLabel, { color: (() => {
+                const t: Record<StackTier, string> = { deep: '#27AE60', mid: '#3498DB', short: '#E67E22', 'push-fold': '#E74C3C' };
+                return t[selectedStackTier];
+              })() }]}>{STACK_TIER_LABELS[selectedStackTier]}</Text>
+              <Text style={[styles.stackTierDesc, { color: colors.mutedForeground }]}>{STACK_TIER_DESCRIPTIONS[selectedStackTier]}</Text>
+            </View>
+
             {/* Position label */}
             <View style={styles.posHeader}>
               <Text style={[styles.posName, { color: colors.foreground }]}>{POSITION_LABELS[selectedPosition]}</Text>
@@ -126,7 +156,7 @@ export default function LearnScreen() {
                   </View>
                 )
                 : null}
-              <RangeGrid position={selectedPosition} compact={false} />
+              <RangeGrid position={selectedPosition} compact={false} stackTier={selectedStackTier} />
             </View>
 
             {/* GTO sizing tip */}
@@ -370,6 +400,23 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     paddingHorizontal: 16,
     marginBottom: 4,
+  },
+  stackTierBadge: {
+    marginHorizontal: 16,
+    marginBottom: 4,
+    borderRadius: 10,
+    borderWidth: 1,
+    padding: 10,
+  },
+  stackTierLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  stackTierDesc: {
+    fontSize: 12,
+    lineHeight: 17,
   },
   infoText: {
     fontSize: 13,
