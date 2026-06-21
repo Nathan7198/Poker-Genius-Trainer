@@ -827,7 +827,14 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       if (state.postFlopStreetsDone.includes(street)) return state;
 
       const board = state.communityCards.filter(c => c.faceUp);
-      const betBB = Math.min(Math.round((betPct / 100) * state.pot * 10) / 10, state.heroStack);
+      // betPct === -1 is the "ALL IN" sentinel — bet the entire remaining stack
+      const isAllInBet = betPct === -1;
+      const betBB = isAllInBet
+        ? state.heroStack
+        : Math.min(Math.round((betPct / 100) * state.pot * 10) / 10, state.heroStack);
+      const effectiveBetPct = isAllInBet
+        ? (state.pot > 0 ? Math.round((state.heroStack / state.pot) * 100) : 100)
+        : betPct;
 
       // Get villain's cards for realistic simulation
       const villainPlayer = getMainVillainPlayer(state);
@@ -925,7 +932,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         const pfaB = buildPostFlopAnalysis(
           state.heroCards, board, street,
           (heroAction === 'bet' ? 'raise' : heroAction) as PostFlopHeroAction,
-          betPct, state.pot,
+          effectiveBetPct, state.pot,
           villainBet,
           vFinalB.action !== villainBet.action ? vFinalB : null,
           state.heroIsAggressor, state.mainVillainType,
@@ -936,9 +943,25 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         const heroAddedB = heroAction === 'call' ? heroBCallB
           : (heroAction === 'bet' || heroAction === 'raise') ? betBB + (vFinalB.action === 'raise' ? heroCallBackB : 0) : 0;
 
+        // Track villain's response chips so their stack stays accurate on later streets
+        const villainBCommit = (() => {
+          if (heroAction === 'fold' || vFoldedB) return 0;
+          if (heroAction === 'bet' || heroAction === 'raise') {
+            if (vFinalB.action === 'call') return villainCallB;
+            if (vFinalB.action === 'raise') return Math.max(0, vFinalB.betBB - villainAlrIn);
+          }
+          return 0;
+        })();
+        const updatedPlayersB = state.players.map(p =>
+          p.position === state.mainVillainPosition && villainBCommit > 0
+            ? { ...p, stack: Math.round(Math.max(0, p.stack - villainBCommit) * 10) / 10 }
+            : p
+        );
+
         if (heroAction === 'fold') {
           return {
             ...state, phase: 'showdown', pot: newPotB,
+            players: updatedPlayersB,
             heroStack: Math.round(Math.max(0, state.heroStack - heroAddedB) * 10) / 10,
             postFlopAnalysis: pfaB, postFlopAnalysisHistory: newHistB,
             villainPostFlopAction: villainBet, showAnalysis: true,
@@ -953,6 +976,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         if (vFoldedB) {
           return {
             ...state, phase: 'showdown', pot: newPotB,
+            players: updatedPlayersB,
             heroStack: Math.round(Math.max(0, state.heroStack - heroAddedB) * 10) / 10,
             postFlopAnalysis: pfaB, postFlopAnalysisHistory: newHistB,
             showAnalysis: true, postFlopStreetsDone: newDoneB,
@@ -965,6 +989,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 
         return {
           ...state, pot: newPotB,
+          players: updatedPlayersB,
           heroStack: Math.round(Math.max(0, state.heroStack - heroAddedB) * 10) / 10,
           postFlopAnalysis: pfaB, postFlopAnalysisHistory: newHistB,
           villainPostFlopAction: vFinalB, showAnalysis: true,
@@ -1049,7 +1074,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 
       // ── Build analysis ──────────────────────────────────────────────────
       const pfa = buildPostFlopAnalysis(
-        state.heroCards, board, street, heroAction, betPct, state.pot,
+        state.heroCards, board, street, heroAction, effectiveBetPct, state.pot,
         villainOpenAction,
         villainFinalResponse.action !== villainOpenAction.action ? villainFinalResponse : null,
         state.heroIsAggressor,
@@ -1061,10 +1086,26 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       const heroAdded = heroAction === 'call' ? heroCallMain
         : (heroAction === 'bet' || heroAction === 'raise') ? betBB + (villainFinalResponse.action === 'raise' ? heroCallBack : 0) : 0;
 
+      // Deduct villain's response chips so their stack stays accurate on later streets
+      const villainMainCommit = (() => {
+        if (heroAction === 'fold' || villainFolded) return 0;
+        if (heroAction === 'bet' || heroAction === 'raise') {
+          if (villainFinalResponse.action === 'call') return villainCallMain;
+          if (villainFinalResponse.action === 'raise') return Math.max(0, villainFinalResponse.betBB - villainAlreadyIn);
+        }
+        return 0;
+      })();
+      const updatedPlayers = state.players.map(p =>
+        p.position === state.mainVillainPosition && villainMainCommit > 0
+          ? { ...p, stack: Math.round(Math.max(0, p.stack - villainMainCommit) * 10) / 10 }
+          : p
+      );
+
       // ── End-of-hand transitions ─────────────────────────────────────────
       if (heroAction === 'fold') {
         return {
           ...state, phase: 'showdown', pot: newPot,
+          players: updatedPlayers,
           heroStack: Math.round(Math.max(0, state.heroStack - heroAdded) * 10) / 10,
           postFlopAnalysis: pfa, postFlopAnalysisHistory: newHistory,
           villainPostFlopAction: villainOpenAction,
@@ -1080,6 +1121,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         // Hero's bet forced villain out — hero wins the pot
         return {
           ...state, phase: 'showdown', pot: newPot,
+          players: updatedPlayers,
           heroStack: Math.round(Math.max(0, state.heroStack - heroAdded) * 10) / 10,
           postFlopAnalysis: pfa, postFlopAnalysisHistory: newHistory,
           villainPostFlopAction: villainFinalResponse,
@@ -1093,6 +1135,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 
       return {
         ...state, pot: newPot,
+        players: updatedPlayers,
         heroStack: Math.round(Math.max(0, state.heroStack - heroAdded) * 10) / 10,
         postFlopAnalysis: pfa, postFlopAnalysisHistory: newHistory,
         villainPostFlopAction: villainFinalResponse,

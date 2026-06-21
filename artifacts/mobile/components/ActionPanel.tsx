@@ -389,31 +389,33 @@ export default function ActionPanel() {
             BET SIZE (% of {potBB}BB pot · max {state.heroStack}BB)
           </Text>
           <View style={styles.presetGrid}>
-            {BET_PCT_PRESETS.map(pct => {
-              const rawBB = Math.round((pct / 100) * state.pot * 10) / 10;
-              const bbAmt = Math.min(rawBB, state.heroStack);
-              const isAllIn = bbAmt >= state.heroStack;
+            {BET_PCT_PRESETS.filter(pct => Math.round((pct / 100) * state.pot * 10) / 10 < state.heroStack).map(pct => {
+              const bbAmt = Math.round((pct / 100) * state.pot * 10) / 10;
               const selected = selectedBetPct === pct;
               return (
                 <TouchableOpacity
                   key={pct}
-                  style={[styles.preset, { backgroundColor: selected ? (isAllIn ? '#7B241C' : '#3D2E08') : '#1A1A1A', borderColor: selected ? (isAllIn ? '#E74C3C' : '#A8882A') : '#282828' }]}
+                  style={[styles.preset, { backgroundColor: selected ? '#3D2E08' : '#1A1A1A', borderColor: selected ? '#A8882A' : '#282828' }]}
                   onPress={() => setSelectedBetPct(pct)}
                 >
-                  <Text style={[styles.presetText, { color: selected ? '#FFF' : colors.foreground }]}>
-                    {isAllIn ? 'ALL IN' : `${pct}%`}
-                  </Text>
-                  <Text style={[styles.presetSub, { color: selected ? '#F0D89080' : colors.mutedForeground }]}>
-                    {bbAmt}BB
-                  </Text>
+                  <Text style={[styles.presetText, { color: selected ? '#FFF' : colors.foreground }]}>{pct}%</Text>
+                  <Text style={[styles.presetSub, { color: selected ? '#F0D89080' : colors.mutedForeground }]}>{bbAmt}BB</Text>
                 </TouchableOpacity>
               );
             })}
+            {/* Single ALL IN option replaces all presets that exceed hero's stack */}
+            <TouchableOpacity
+              key="allin"
+              style={[styles.preset, { backgroundColor: selectedBetPct === -1 ? '#7B241C' : '#1A1A1A', borderColor: selectedBetPct === -1 ? '#E74C3C' : '#282828' }]}
+              onPress={() => setSelectedBetPct(-1)}
+            >
+              <Text style={[styles.presetText, { color: selectedBetPct === -1 ? '#FFF' : colors.foreground }]}>ALL IN</Text>
+              <Text style={[styles.presetSub, { color: selectedBetPct === -1 ? '#FF9999' : colors.mutedForeground }]}>{state.heroStack}BB</Text>
+            </TouchableOpacity>
           </View>
           {(() => {
-            const rawBB = Math.round((selectedBetPct / 100) * state.pot * 10) / 10;
-            const bbAmt = Math.min(rawBB, state.heroStack);
-            const isAllIn = bbAmt >= state.heroStack;
+            const isAllIn = selectedBetPct === -1 || Math.round((selectedBetPct / 100) * state.pot * 10) / 10 >= state.heroStack;
+            const bbAmt = selectedBetPct === -1 ? state.heroStack : Math.min(Math.round((selectedBetPct / 100) * state.pot * 10) / 10, state.heroStack);
             return (
               <TouchableOpacity
                 style={[styles.confirmBtn, { backgroundColor: isAllIn ? '#7B241C' : '#3D2E08' }]}
