@@ -707,10 +707,11 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         }
       }
 
-      // Apply post-hero preflop stack deductions
+      // Apply post-hero preflop stack deductions and mark folded-after-hero bots inactive
       const postPreflopPlayers = state.players.map(p => ({
         ...p,
         stack: Math.round(Math.max(0, p.stack - (extraCommits.get(p.position) ?? 0)) * 10) / 10,
+        isActive: foldedInSim.has(p.position) ? false : p.isActive,
       }));
 
       const analysis = buildPreflopAnalysis(state.heroCards, state.heroPosition, heroAction, raiseBB, state.actionCtx, state.mainVillainType);
