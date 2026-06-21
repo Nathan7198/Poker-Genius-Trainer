@@ -983,7 +983,8 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         if (vFoldedB) {
           return {
             ...state, phase: 'showdown', pot: newPotB,
-            players: updatedPlayersB,
+            players: updatedPlayersB.map(p => p.position === state.mainVillainPosition ? { ...p, isActive: false } : p),
+            handActivePlayers: state.handActivePlayers.filter(p => p !== (state.mainVillainPosition as Position)),
             heroStack: Math.round(Math.max(0, state.heroStack - heroAddedB) * 10) / 10,
             postFlopAnalysis: pfaB, postFlopAnalysisHistory: newHistB,
             showAnalysis: true, postFlopStreetsDone: newDoneB,
@@ -1122,7 +1123,8 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         // Hero's bet forced villain out — hero wins the pot
         return {
           ...state, phase: 'showdown', pot: newPot,
-          players: updatedPlayers,
+          players: updatedPlayers.map(p => p.position === state.mainVillainPosition ? { ...p, isActive: false } : p),
+          handActivePlayers: state.handActivePlayers.filter(p => p !== (state.mainVillainPosition as Position)),
           heroStack: Math.round(Math.max(0, state.heroStack - heroAdded) * 10) / 10,
           postFlopAnalysis: pfa, postFlopAnalysisHistory: newHistory,
           villainPostFlopAction: villainFinalResponse,
