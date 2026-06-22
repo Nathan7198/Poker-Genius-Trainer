@@ -467,6 +467,39 @@ export default function PlayScreen() {
               <Text style={[styles.idleSubtext, { color: colors.mutedForeground }]}>
                 Hero always at bottom · Boards never repeat · Full street coaching
               </Text>
+
+              {/* App feature guide */}
+              <View style={[styles.featureGuide, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <View style={styles.featureRow}>
+                  <Feather name="layers" size={15} color={colors.gold} />
+                  <View style={styles.featureText}>
+                    <Text style={[styles.featureTitle, { color: colors.foreground }]}>Game Modes</Text>
+                    <Text style={[styles.featureDesc, { color: colors.mutedForeground }]}>
+                      Full Hands plays street-by-street with pot odds and coaching. Pre Flop drills opens and 3-bets only. GTO Mode pits you against optimal bots with no hints — compare your decision after. Custom lets you study any specific scenario.
+                    </Text>
+                  </View>
+                </View>
+                <View style={[styles.featureDivider, { backgroundColor: colors.border }]} />
+                <View style={styles.featureRow}>
+                  <Feather name="book-open" size={15} color="#3498DB" />
+                  <View style={styles.featureText}>
+                    <Text style={[styles.featureTitle, { color: colors.foreground }]}>Learn Tab</Text>
+                    <Text style={[styles.featureDesc, { color: colors.mutedForeground }]}>
+                      GTO opening ranges and defence charts for every position. Automatically shows the correct stack-size tier — deep (75BB+), mid, short, or push-fold — matching your current stack in a live hand.
+                    </Text>
+                  </View>
+                </View>
+                <View style={[styles.featureDivider, { backgroundColor: colors.border }]} />
+                <View style={styles.featureRow}>
+                  <Feather name="bar-chart-2" size={15} color="#27AE60" />
+                  <View style={styles.featureText}>
+                    <Text style={[styles.featureTitle, { color: colors.foreground }]}>Stats Tab</Text>
+                    <Text style={[styles.featureDesc, { color: colors.mutedForeground }]}>
+                      Tracks your win rate, BB/100 profit, GTO accuracy per street, and full hand history. Review past hands to spot leaks and measure improvement over time.
+                    </Text>
+                  </View>
+                </View>
+              </View>
             </View>
           )
         )}
@@ -647,6 +680,12 @@ const styles = StyleSheet.create({
   dealBtn: { paddingVertical: 16, paddingHorizontal: 48, borderRadius: 14, alignItems: 'center' },
   dealBtnText: { fontSize: 18, fontWeight: '900', letterSpacing: 2 },
   idleSubtext: { fontSize: 11, textAlign: 'center', fontStyle: 'italic' },
+  featureGuide: { borderRadius: 12, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 4, alignSelf: 'stretch' },
+  featureRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 10, gap: 10 },
+  featureText: { flex: 1 },
+  featureTitle: { fontSize: 13, fontWeight: '800', marginBottom: 3 },
+  featureDesc: { fontSize: 11, lineHeight: 16 },
+  featureDivider: { height: 1 },
 
   // Showdown footer (outside ScrollView — always fully visible)
   sdFooter: { borderTopWidth: 1, paddingTop: 2 },
