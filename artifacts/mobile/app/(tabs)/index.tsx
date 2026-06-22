@@ -264,7 +264,12 @@ export default function PlayScreen() {
       {/* Mode picker — rendered outside header so touches aren't clipped */}
       {showModePicker && (
         <View style={[styles.modePicker, { backgroundColor: colors.card, borderColor: colors.border, top: modeBtnY + modeBtnH + 4, left: modeBtnX }]}>
-          {([['full', 'Full Hands'], ['preflop', 'Pre Flop'], ['gto', 'GTO Mode'], ['custom', 'Custom']] as const).map(([val, label]) => {
+          {([
+            ['full',    'Full Hands', 'Play street-by-street with pot odds, equity, and post-flop coaching.'],
+            ['preflop', 'Pre Flop',   'Preflop-only drill — practice opens, calls, and 3-bets without seeing the board.'],
+            ['gto',     'GTO Mode',   'Face GTO-calibrated bots with no hints. Compare your decision to optimal play after.'],
+            ['custom',  'Custom',     'Set up a specific hand, position, and board texture to study a scenario.'],
+          ] as const).map(([val, label, desc]) => {
             const isSelected = state.trainingMode === val;
             return (
               <TouchableOpacity
@@ -276,6 +281,7 @@ export default function PlayScreen() {
                   <Feather name="check" size={13} color={isSelected ? colors.goldLight : 'transparent'} style={{ marginRight: 6 }} />
                   <Text style={[styles.modeOptionText, { color: isSelected ? colors.goldLight : colors.foreground }]}>{label}</Text>
                 </View>
+                <Text style={[styles.modeOptionDesc, { color: colors.mutedForeground }]}>{desc}</Text>
               </TouchableOpacity>
             );
           })}
@@ -571,10 +577,11 @@ const styles = StyleSheet.create({
   modeBtn: { flex: 1, paddingHorizontal: 4, paddingVertical: 5, borderRadius: 8, borderWidth: 1, backgroundColor: '#181818', alignItems: 'center' },
   modeBtnLabel: { fontSize: 8, fontWeight: '700', letterSpacing: 1.5, color: '#888', marginBottom: 1 },
   modeBtnText: { fontSize: 12, fontWeight: '800', letterSpacing: 0.3 },
-  modePicker: { position: 'absolute', zIndex: 100, borderRadius: 10, borderWidth: 1, paddingVertical: 4, minWidth: 130, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 8 },
-  modeOption: { paddingHorizontal: 12, paddingVertical: 10, borderRadius: 6 },
+  modePicker: { position: 'absolute', zIndex: 100, borderRadius: 12, borderWidth: 1, width: 270, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 8 },
+  modeOption: { padding: 12, borderRadius: 8 },
   modeOptionRow: { flexDirection: 'row', alignItems: 'center' },
-  modeOptionText: { fontSize: 13, fontWeight: '700' },
+  modeOptionText: { fontSize: 14, fontWeight: '700' },
+  modeOptionDesc: { fontSize: 11, marginTop: 2, lineHeight: 15 },
   diffBtn: { flex: 1, paddingHorizontal: 4, paddingVertical: 5, borderRadius: 8, borderWidth: 1, alignItems: 'center' },
   diffBtnLabel: { fontSize: 8, fontWeight: '700', letterSpacing: 1.5, color: '#888', marginBottom: 1 },
   diffBtnText: { fontSize: 12, fontWeight: '800', letterSpacing: 0.3 },
