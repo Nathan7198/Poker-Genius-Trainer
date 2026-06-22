@@ -608,11 +608,16 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       }
 
       const allPositions = getPositionsForSize(state.tableSize);
-      // In tournament mode, exclude positions that have been knocked out
-      const activePositions = state.gameFormat === 'tournament'
-        ? allPositions.filter(p => !eliminated.includes(p))
+      // Tournament: compute positions from remaining player COUNT so BTN/SB/BB always appear
+      const activeCount = Math.max(2, allPositions.length - eliminated.length);
+      const activePositions = state.gameFormat === 'tournament' && eliminated.length > 0
+        ? getPositionsForSize(activeCount)
         : allPositions;
       const heroPosition = activePositions[state.handNumber % activePositions.length];
+      // Surviving bot stacks in position order (skip eliminated seats)
+      const survivingBotStacks = allPositions
+        .filter(p => !eliminated.includes(p as Position) && tStacks.bots[p] !== undefined)
+        .map(p => tStacks.bots[p] as number);
       const recentSigs = state.recentBoardSigs;
       let attempts = 0;
       let deck: Card[] = [];
@@ -633,9 +638,9 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           const pos = otherPositions[i];
           const [botCards, nextDeck] = dealCards(deck, 2);
           deck = nextDeck;
-          // Tournament: use persistent stack. Cash: reset to 100BB.
+          // Tournament: use surviving stacks by index so recycled position labels don't inherit eliminated stacks.
           const baseStack = state.gameFormat === 'tournament'
-            ? Math.max(0.5, tStacks.bots[pos] ?? 100)
+            ? Math.max(0.5, survivingBotStacks[i] ?? 100)
             : (pos === 'BB' ? 99 : pos === 'SB' ? 99.5 : 100);
           // Deduct blind in tournament mode (stack already includes blind for cash)
           const tournamentStack = state.gameFormat === 'tournament'
