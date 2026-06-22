@@ -189,18 +189,21 @@ export default function PlayScreen() {
     <View style={[styles.root, { backgroundColor: colors.background, paddingTop: Platform.OS === 'web' ? insets.top + 10 : 0, paddingBottom: TAB_BAR_H + insets.bottom }]}>
       {/* Header */}
       <View style={[styles.topBar, { paddingTop: Platform.OS !== 'web' ? insets.top + 4 : 4, borderBottomColor: colors.border }]}>
-        <View>
+        {/* Row 1: title + live street badge */}
+        <View style={styles.topRow}>
           <Text style={[styles.appTitle, { color: colors.gold }]}>POKER TRAINER</Text>
-        </View>
-
-        <View style={styles.headerRight}>
           {streetBadge && (
             <View style={[styles.streetBadge, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
               <Text style={[styles.streetBadgeText, { color: colors.gold }]}>{streetBadge}</Text>
             </View>
           )}
+        </View>
+
+        {/* Row 2: settings buttons — each flex:1 so they always fit the screen */}
+        <View style={styles.settingsRow}>
           <View
             ref={modeBtnRef}
+            style={{ flex: 1 }}
             onLayout={() => {
               modeBtnRef.current?.measure((_x, _y, width, height, pageX, pageY) => {
                 setModeBtnX(pageX);
@@ -219,7 +222,7 @@ export default function PlayScreen() {
                   : state.trainingMode === 'custom' ? '#3498DB'
                   : isPreflopMode ? colors.goldLight
                   : colors.foreground,
-              }]}>
+              }]} numberOfLines={1}>
                 {state.trainingMode === 'gto' ? 'GTO'
                   : state.trainingMode === 'custom' ? 'Custom'
                   : isPreflopMode ? 'Pre Flop'
@@ -242,7 +245,7 @@ export default function PlayScreen() {
             onPress={() => { setShowFormatPicker(!showFormatPicker); setShowModePicker(false); setShowTablePicker(false); setShowDifficultyPicker(false); }}
           >
             <Text style={styles.formatBtnLabel}>FORMAT</Text>
-            <Text style={[styles.formatBtnText, { color: state.gameFormat === 'tournament' ? colors.goldLight : colors.foreground }]}>
+            <Text style={[styles.formatBtnText, { color: state.gameFormat === 'tournament' ? colors.goldLight : colors.foreground }]} numberOfLines={1}>
               {state.gameFormat === 'tournament' ? 'Tourn.' : 'Cash'}
             </Text>
           </TouchableOpacity>
@@ -251,7 +254,7 @@ export default function PlayScreen() {
             onPress={() => { setShowDifficultyPicker(!showDifficultyPicker); setShowModePicker(false); setShowTablePicker(false); setShowFormatPicker(false); }}
           >
             <Text style={styles.diffBtnLabel}>DIFFICULTY</Text>
-            <Text style={[styles.diffBtnText, { color: diffColors[state.difficulty] }]}>
+            <Text style={[styles.diffBtnText, { color: diffColors[state.difficulty] }]} numberOfLines={1}>
               {state.difficulty}
             </Text>
           </TouchableOpacity>
@@ -281,7 +284,7 @@ export default function PlayScreen() {
 
       {/* Format picker */}
       {showFormatPicker && (
-        <View style={[styles.formatPicker, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={[styles.formatPicker, { backgroundColor: colors.card, borderColor: colors.border, top: modeBtnY + modeBtnH + 4 }]}>
           {([
             ['cash', 'Cash Games', 'Start every hand at 100BB. No persistent stacks.'],
             ['tournament', 'Tournament', 'Stacks carry over between hands. Reach 0BB and you\'re out.'],
@@ -306,7 +309,7 @@ export default function PlayScreen() {
 
       {/* Difficulty picker */}
       {showDifficultyPicker && (
-        <View style={[styles.diffPicker, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={[styles.diffPicker, { backgroundColor: colors.card, borderColor: colors.border, top: modeBtnY + modeBtnH + 4 }]}>
           {DIFFICULTIES.map(d => (
             <TouchableOpacity
               key={d}
@@ -325,7 +328,7 @@ export default function PlayScreen() {
 
       {/* Table size picker */}
       {showTablePicker && (
-        <View style={[styles.tablePicker, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={[styles.tablePicker, { backgroundColor: colors.card, borderColor: colors.border, top: modeBtnY + modeBtnH + 4 }]}>
           {([
             [9, 'Full Ring', '9 players · standard full ring'],
             [6, '6-Max', '6 players · default format'],
@@ -552,27 +555,31 @@ export default function PlayScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   topBar: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 14, paddingBottom: 10, borderBottomWidth: 1,
+    flexDirection: 'column',
+    paddingHorizontal: 14, paddingBottom: 8, borderBottomWidth: 1,
   },
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  topRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  settingsRow: { flexDirection: 'row', gap: 6 },
   appTitle: { fontSize: 15, fontWeight: '900', letterSpacing: 2 },
   streetBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1 },
   streetBadgeText: { fontSize: 10, fontWeight: '800', letterSpacing: 1 },
   potBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1 },
   potText: { fontSize: 10, fontWeight: '700' },
-  modeBtn: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1, backgroundColor: '#181818', alignItems: 'center', minWidth: 90 },
+  modeBtn: { flex: 1, paddingHorizontal: 4, paddingVertical: 5, borderRadius: 8, borderWidth: 1, backgroundColor: '#181818', alignItems: 'center' },
   modeBtnLabel: { fontSize: 8, fontWeight: '700', letterSpacing: 1.5, color: '#888', marginBottom: 1 },
   modeBtnText: { fontSize: 12, fontWeight: '800', letterSpacing: 0.3 },
   modePicker: { position: 'absolute', zIndex: 100, borderRadius: 10, borderWidth: 1, paddingVertical: 4, minWidth: 130, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 8 },
   modeOption: { paddingHorizontal: 12, paddingVertical: 10, borderRadius: 6 },
   modeOptionRow: { flexDirection: 'row', alignItems: 'center' },
   modeOptionText: { fontSize: 13, fontWeight: '700' },
-  diffBtn: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1, alignItems: 'center', minWidth: 90 },
+  diffBtn: { flex: 1, paddingHorizontal: 4, paddingVertical: 5, borderRadius: 8, borderWidth: 1, alignItems: 'center' },
   diffBtnLabel: { fontSize: 8, fontWeight: '700', letterSpacing: 1.5, color: '#888', marginBottom: 1 },
   diffBtnText: { fontSize: 12, fontWeight: '800', letterSpacing: 0.3 },
   diffPicker: {
-    position: 'absolute', right: 12, top: 62, zIndex: 100,
+    position: 'absolute', right: 12, zIndex: 100,
     borderRadius: 12, borderWidth: 1, width: 280,
     shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.5, shadowRadius: 8, elevation: 10,
@@ -581,11 +588,11 @@ const styles = StyleSheet.create({
   diffOptionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   diffOptionName: { fontSize: 14, fontWeight: '700' },
   diffOptionDesc: { fontSize: 11, marginTop: 2, lineHeight: 15 },
-  tableBtn: { paddingHorizontal: 8, paddingVertical: 5, borderRadius: 8, borderWidth: 1, alignItems: 'center', minWidth: 52 },
+  tableBtn: { flex: 1, paddingHorizontal: 4, paddingVertical: 5, borderRadius: 8, borderWidth: 1, alignItems: 'center' },
   tableBtnLabel: { fontSize: 8, fontWeight: '700', letterSpacing: 1.5, color: '#888', marginBottom: 1 },
   tableBtnText: { fontSize: 12, fontWeight: '800', letterSpacing: 0.3 },
   tablePicker: {
-    position: 'absolute', right: 12, top: 62, zIndex: 100,
+    position: 'absolute', right: 12, zIndex: 100,
     borderRadius: 12, borderWidth: 1, width: 260,
     shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.5, shadowRadius: 8, elevation: 10,
@@ -597,11 +604,11 @@ const styles = StyleSheet.create({
   customSizes: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: 12, paddingBottom: 10 },
   customSizeBtn: { width: 36, height: 36, borderRadius: 8, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   customSizeText: { fontSize: 14, fontWeight: '800' },
-  formatBtn: { paddingHorizontal: 8, paddingVertical: 5, borderRadius: 8, borderWidth: 1, alignItems: 'center', minWidth: 58 },
+  formatBtn: { flex: 1, paddingHorizontal: 4, paddingVertical: 5, borderRadius: 8, borderWidth: 1, alignItems: 'center' },
   formatBtnLabel: { fontSize: 8, fontWeight: '700', letterSpacing: 1.5, color: '#888', marginBottom: 1 },
   formatBtnText: { fontSize: 12, fontWeight: '800', letterSpacing: 0.3 },
   formatPicker: {
-    position: 'absolute', right: 12, top: 62, zIndex: 100,
+    position: 'absolute', right: 12, zIndex: 100,
     borderRadius: 12, borderWidth: 1, width: 260,
     shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.5, shadowRadius: 8, elevation: 10,
