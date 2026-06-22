@@ -473,9 +473,16 @@ export default function PlayScreen() {
                 <View style={styles.featureRow}>
                   <Feather name="layers" size={15} color={colors.gold} />
                   <View style={styles.featureText}>
-                    <Text style={[styles.featureTitle, { color: colors.foreground }]}>Game Modes</Text>
+                    <Text style={[styles.featureTitle, { color: colors.foreground }]}>Four Game Modes</Text>
                     <Text style={[styles.featureDesc, { color: colors.mutedForeground }]}>
-                      Full Hands plays street-by-street with pot odds and coaching. Pre Flop drills opens and 3-bets only. GTO Mode pits you against optimal bots with no hints — compare your decision after. Custom lets you study any specific scenario.
+                      <Text style={{ color: colors.foreground, fontWeight: '700' }}>Full Hands</Text>
+                      {' '}takes you street-by-street through a complete hand — see real-time pot odds, equity estimates, board texture reads, and post-flop coaching at every decision point.{'\n\n'}
+                      <Text style={{ color: colors.foreground, fontWeight: '700' }}>Pre Flop</Text>
+                      {' '}is a pure preflop drill. Every hand, every position — practice opens, calls, 3-bets, and folds until your preflop instincts are automatic.{'\n\n'}
+                      <Text style={{ color: colors.foreground, fontWeight: '700' }}>GTO Mode</Text>
+                      {' '}removes all coaching and faces you against mathematically optimal bots. Make your decision blind, then see exactly how it compares to game theory optimal play — with a full breakdown of what you should have done and why.{'\n\n'}
+                      <Text style={{ color: colors.foreground, fontWeight: '700' }}>Custom</Text>
+                      {' '}puts you in the director's chair. Set your hole cards, choose your position, pick the board texture, and engineer the exact scenario you want to master.
                     </Text>
                   </View>
                 </View>
@@ -483,9 +490,19 @@ export default function PlayScreen() {
                 <View style={styles.featureRow}>
                   <Feather name="book-open" size={15} color="#3498DB" />
                   <View style={styles.featureText}>
-                    <Text style={[styles.featureTitle, { color: colors.foreground }]}>Learn Tab</Text>
+                    <Text style={[styles.featureTitle, { color: colors.foreground }]}>Learn Tab — Range Trainer</Text>
                     <Text style={[styles.featureDesc, { color: colors.mutedForeground }]}>
-                      GTO opening ranges and defence charts for every position. Automatically shows the correct stack-size tier — deep (75BB+), mid, short, or push-fold — matching your current stack in a live hand.
+                      Master the 169-hand grid that separates winning players from everyone else. Every position — UTG, HJ, CO, BTN, SB, and BB defence — has its own precisely calibrated GTO opening range displayed as a colour-coded grid.{'\n\n'}
+                      Ranges adapt across four stack-size tiers:{' '}
+                      <Text style={{ color: colors.foreground, fontWeight: '700' }}>Deep (75BB+)</Text>
+                      {', '}
+                      <Text style={{ color: colors.foreground, fontWeight: '700' }}>Mid (40–75BB)</Text>
+                      {', '}
+                      <Text style={{ color: colors.foreground, fontWeight: '700' }}>Short (20–40BB)</Text>
+                      {', and '}
+                      <Text style={{ color: colors.foreground, fontWeight: '700' }}>Push-Fold (under 20BB)</Text>
+                      {' '}— because the right play at 100BB is often dead wrong at 15BB.{'\n\n'}
+                      During a live hand, the Learn tab auto-syncs to your exact position and current stack, so you can cross-reference the correct range in real time. 3-bet value hands and bluff candidates are colour-coded separately.
                     </Text>
                   </View>
                 </View>
@@ -493,9 +510,16 @@ export default function PlayScreen() {
                 <View style={styles.featureRow}>
                   <Feather name="bar-chart-2" size={15} color="#27AE60" />
                   <View style={styles.featureText}>
-                    <Text style={[styles.featureTitle, { color: colors.foreground }]}>Stats Tab</Text>
+                    <Text style={[styles.featureTitle, { color: colors.foreground }]}>Stats Tab — Track Your Progress</Text>
                     <Text style={[styles.featureDesc, { color: colors.mutedForeground }]}>
-                      Tracks your win rate, BB/100 profit, GTO accuracy per street, and full hand history. Review past hands to spot leaks and measure improvement over time.
+                      Every hand you play is logged and analysed. Your dashboard tracks{' '}
+                      <Text style={{ color: colors.foreground, fontWeight: '700' }}>win rate</Text>
+                      {', '}
+                      <Text style={{ color: colors.foreground, fontWeight: '700' }}>BB/100 profit</Text>
+                      {', and '}
+                      <Text style={{ color: colors.foreground, fontWeight: '700' }}>GTO accuracy</Text>
+                      {' '}broken down street by street — so you can see exactly where your game is leaking.{'\n\n'}
+                      The full hand history lets you replay every decision: your hole cards, position, the board that ran out, what you did on each street, and whether it was correct. Spot the patterns, fix the leaks, and watch your accuracy climb hand by hand.
                     </Text>
                   </View>
                 </View>
