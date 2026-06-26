@@ -11,6 +11,7 @@ import {
   POSITIONS, Position, POSITION_LABELS, POSITION_COLORS, POSITION_DESCRIPTIONS,
   PLAYER_TYPE_INFO, PlayerType, DIFFICULTIES, DIFFICULTY_DESCRIPTIONS,
   calcPotOdds, StackTier, STACK_TIER_LABELS, STACK_TIER_DESCRIPTIONS, getStackTier,
+  TableFormat, TABLE_FORMAT_LABELS, TABLE_FORMAT_RANGES, FORMAT_POSITIONS, getTableFormat,
 } from '@/constants/pokerData';
 
 type Tab = 'ranges'|'positions'|'players'|'theory'|'outs';
@@ -37,17 +38,30 @@ export default function LearnScreen() {
   const [activeTab, setActiveTab] = useState<Tab>('ranges');
   const [selectedPosition, setSelectedPosition] = useState<Position>('BTN');
   const [selectedStackTier, setSelectedStackTier] = useState<StackTier>('deep');
+  const [selectedTableFormat, setSelectedTableFormat] = useState<TableFormat>(
+    () => getTableFormat(state.tableSize)
+  );
+
+  const handleFormatChange = (fmt: TableFormat) => {
+    setSelectedTableFormat(fmt);
+    const valid = FORMAT_POSITIONS[fmt];
+    if (!valid.includes(selectedPosition)) setSelectedPosition('BTN');
+  };
 
   // When navigating to this tab during an active hand, jump straight to the
   // hero's current position in the Ranges view so they can check their range.
   useFocusEffect(
     useCallback(() => {
       if (state.phase !== 'idle') {
+        const fmt = getTableFormat(state.tableSize);
         setActiveTab('ranges');
-        setSelectedPosition(state.heroPosition);
+        setSelectedTableFormat(fmt);
+        const valid = FORMAT_POSITIONS[fmt];
+        const pos = valid.includes(state.heroPosition) ? state.heroPosition : 'BTN';
+        setSelectedPosition(pos);
         setSelectedStackTier(getStackTier(state.heroStack));
       }
-    }, [state.phase, state.heroPosition, state.heroStack])
+    }, [state.phase, state.heroPosition, state.heroStack, state.tableSize])
   );
 
   const topPad = Platform.OS === 'web' ? insets.top + 10 : insets.top + 4;
@@ -57,7 +71,7 @@ export default function LearnScreen() {
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <Text style={[styles.title, { color: colors.gold }]}>GTO LIBRARY</Text>
-        <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>6-Max No-Limit Hold'em</Text>
+        <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>{TABLE_FORMAT_LABELS[selectedTableFormat]} · No-Limit Hold'em</Text>
       </View>
 
       {/* Tab bar */}
@@ -86,12 +100,36 @@ export default function LearnScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* ── RANGES ── */}
-        {activeTab === 'ranges' && (
+        {activeTab === 'ranges' && (() => {
+          const validPositions = FORMAT_POSITIONS[selectedTableFormat];
+          const isSixmax = selectedTableFormat === 'sixmax';
+          const tierColors: Record<StackTier, string> = { deep: '#27AE60', mid: '#3498DB', short: '#E67E22', 'push-fold': '#E74C3C' };
+          const tierShort: Record<StackTier, string> = { deep: '75BB+', mid: '40–75BB', short: '20–40BB', 'push-fold': '<20BB' };
+          const fmtColors: Record<TableFormat, string> = { hu: '#E74C3C', sh: '#E67E22', sixmax: '#27AE60', fr: '#3498DB' };
+          return (
           <View>
-            {/* Position selector */}
+            {/* Table format selector */}
+            <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>TABLE SIZE</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.posRow} contentContainerStyle={{ gap: 8, paddingHorizontal: 16, paddingBottom: 8 }}>
+              {(['hu', 'sh', 'sixmax', 'fr'] as TableFormat[]).map(fmt => {
+                const col = fmtColors[fmt];
+                const sel = selectedTableFormat === fmt;
+                return (
+                  <TouchableOpacity
+                    key={fmt}
+                    style={[styles.posChip, { backgroundColor: sel ? col : colors.secondary, borderColor: col, borderWidth: 1 }]}
+                    onPress={() => handleFormatChange(fmt)}
+                  >
+                    <Text style={[styles.posChipText, { color: sel ? '#FFF' : col }]}>{TABLE_FORMAT_LABELS[fmt]}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            {/* Position selector — filtered to valid positions for selected format */}
             <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>SELECT POSITION</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.posRow} contentContainerStyle={{ gap: 8, paddingHorizontal: 16, paddingBottom: 8 }}>
-              {POSITIONS.map(pos => (
+              {validPositions.map(pos => (
                 <TouchableOpacity
                   key={pos}
                   style={[styles.posChip, {
@@ -108,34 +146,42 @@ export default function LearnScreen() {
               ))}
             </ScrollView>
 
-            {/* Stack tier selector */}
-            <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>STACK SIZE</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.posRow} contentContainerStyle={{ gap: 8, paddingHorizontal: 16, paddingBottom: 8 }}>
-              {(['deep', 'mid', 'short', 'push-fold'] as StackTier[]).map(tier => {
-                const tierColors: Record<StackTier, string> = { deep: '#27AE60', mid: '#3498DB', short: '#E67E22', 'push-fold': '#E74C3C' };
-                const col = tierColors[tier];
-                const tierShort: Record<StackTier, string> = { deep: '75BB+', mid: '40–75BB', short: '20–40BB', 'push-fold': '<20BB' };
-                const sel = selectedStackTier === tier;
-                return (
-                  <TouchableOpacity
-                    key={tier}
-                    style={[styles.posChip, { backgroundColor: sel ? col : colors.secondary, borderColor: col, borderWidth: 1 }]}
-                    onPress={() => setSelectedStackTier(tier)}
-                  >
-                    <Text style={[styles.posChipText, { color: sel ? '#FFF' : col }]}>{tierShort[tier]}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-
-            {/* Stack tier description */}
-            <View style={[styles.stackTierBadge, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Text style={[styles.stackTierLabel, { color: (() => {
-                const t: Record<StackTier, string> = { deep: '#27AE60', mid: '#3498DB', short: '#E67E22', 'push-fold': '#E74C3C' };
-                return t[selectedStackTier];
-              })() }]}>{STACK_TIER_LABELS[selectedStackTier]}</Text>
-              <Text style={[styles.stackTierDesc, { color: colors.mutedForeground }]}>{STACK_TIER_DESCRIPTIONS[selectedStackTier]}</Text>
-            </View>
+            {/* Stack tier selector — only for 6-max (stack-adjusted ranges only defined for 6-max) */}
+            {isSixmax ? (
+              <>
+                <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>STACK SIZE</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.posRow} contentContainerStyle={{ gap: 8, paddingHorizontal: 16, paddingBottom: 8 }}>
+                  {(['deep', 'mid', 'short', 'push-fold'] as StackTier[]).map(tier => {
+                    const col = tierColors[tier];
+                    const sel = selectedStackTier === tier;
+                    return (
+                      <TouchableOpacity
+                        key={tier}
+                        style={[styles.posChip, { backgroundColor: sel ? col : colors.secondary, borderColor: col, borderWidth: 1 }]}
+                        onPress={() => setSelectedStackTier(tier)}
+                      >
+                        <Text style={[styles.posChipText, { color: sel ? '#FFF' : col }]}>{tierShort[tier]}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+                <View style={[styles.stackTierBadge, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <Text style={[styles.stackTierLabel, { color: tierColors[selectedStackTier] }]}>{STACK_TIER_LABELS[selectedStackTier]}</Text>
+                  <Text style={[styles.stackTierDesc, { color: colors.mutedForeground }]}>{STACK_TIER_DESCRIPTIONS[selectedStackTier]}</Text>
+                </View>
+              </>
+            ) : (
+              <View style={[styles.stackTierBadge, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <Text style={[styles.stackTierLabel, { color: fmtColors[selectedTableFormat] }]}>{TABLE_FORMAT_LABELS[selectedTableFormat]}</Text>
+                <Text style={[styles.stackTierDesc, { color: colors.mutedForeground }]}>
+                  {selectedTableFormat === 'hu'
+                    ? 'Heads-up strategy differs significantly from multi-way play. Ranges are very wide — position and aggression dominate. Stack-size tiers apply to 6-max view.'
+                    : selectedTableFormat === 'sh'
+                      ? 'Short-handed tables reward aggression. Every position plays wider as there are fewer players to run into strong hands. Stack-size tiers apply to 6-max view.'
+                      : 'Full ring EP ranges are significantly tighter — you have up to 8 players still to act. Ranges widen considerably in later positions. Stack-size tiers apply to 6-max view.'}
+                </Text>
+              </View>
+            )}
 
             {/* Position label */}
             <View style={styles.posHeader}>
@@ -148,17 +194,24 @@ export default function LearnScreen() {
 
             {/* Range grid */}
             <View style={{ paddingHorizontal: 16, marginTop: 12 }}>
-              {selectedPosition === 'BB'
-                ? (
-                  <View>
-                    <Text style={[styles.sectionLabel, { color: colors.mutedForeground, paddingHorizontal: 0 }]}>BB DEFENSE VS 3x OPEN</Text>
-                    <Text style={[styles.infoText, { color: colors.foreground, marginBottom: 8 }]}>
-                      BB defends very wide due to discounted pot odds. You already have 1BB invested and only need to call 2BB more into a ~6.5BB pot. This gives you ~30% pot odds, requiring only ~30% equity to call.
-                    </Text>
-                  </View>
-                )
-                : null}
-              <RangeGrid position={selectedPosition} compact={false} stackTier={selectedStackTier} />
+              {selectedPosition === 'BB' && (
+                <View>
+                  <Text style={[styles.sectionLabel, { color: colors.mutedForeground, paddingHorizontal: 0 }]}>
+                    {selectedTableFormat === 'hu' ? 'HU BB DEFENSE VS BTN OPEN' : 'BB DEFENSE VS 3x OPEN'}
+                  </Text>
+                  <Text style={[styles.infoText, { color: colors.foreground, marginBottom: 8 }]}>
+                    {selectedTableFormat === 'hu'
+                      ? 'In heads-up, BB defends extremely wide (~65%). You have great pot odds and only one opponent — folding too often is a major leak.'
+                      : 'BB defends very wide due to discounted pot odds. You already have 1BB invested and only need to call 2BB more into a ~6.5BB pot. This gives you ~30% pot odds, requiring only ~30% equity to call.'}
+                  </Text>
+                </View>
+              )}
+              <RangeGrid
+                position={selectedPosition}
+                compact={false}
+                stackTier={isSixmax ? selectedStackTier : undefined}
+                tableFormat={selectedTableFormat}
+              />
             </View>
 
             {/* GTO sizing tip */}
@@ -174,7 +227,8 @@ export default function LearnScreen() {
               </Text>
             </View>
           </View>
-        )}
+          );
+        })()}
 
         {/* ── POSITIONS ── */}
         {activeTab === 'positions' && (

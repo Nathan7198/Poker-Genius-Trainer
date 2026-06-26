@@ -1050,6 +1050,139 @@ export const STACK_BB_DEFENSE: Record<StackTier, Set<string>> = {
 // 3-bet value range at short stacks — no bluffs, only premium value
 export const SHORT_THREEBET_VALUE = new Set(['AA','KK','QQ','JJ','TT','AKs','AKo','AQs','AQo']);
 
+// ── Table Format Ranges ─────────────────────────────────────────────────────
+
+export type TableFormat = 'hu' | 'sh' | 'sixmax' | 'fr';
+
+export const TABLE_FORMAT_LABELS: Record<TableFormat, string> = {
+  hu:     'Heads-Up (2)',
+  sh:     'Short-Handed (3–5)',
+  sixmax: '6-Max',
+  fr:     'Full Ring (7–9)',
+};
+
+export function getTableFormat(size: number): TableFormat {
+  if (size <= 2) return 'hu';
+  if (size <= 5) return 'sh';
+  if (size === 6) return 'sixmax';
+  return 'fr';
+}
+
+// Heads-up: BTN opens ~70% — all pairs, all suited, Ax/Kx offsuit, top connectors
+const HU_BTN_RANGE = new Set([
+  'AA','KK','QQ','JJ','TT','99','88','77','66','55','44','33','22',
+  'AKs','AQs','AJs','ATs','A9s','A8s','A7s','A6s','A5s','A4s','A3s','A2s',
+  'KQs','KJs','KTs','K9s','K8s','K7s','K6s','K5s','K4s','K3s','K2s',
+  'QJs','QTs','Q9s','Q8s','Q7s','Q6s','Q5s','Q4s','Q3s','Q2s',
+  'JTs','J9s','J8s','J7s','J6s','J5s','J4s','J3s','J2s',
+  'T9s','T8s','T7s','T6s','T5s','T4s','T3s','T2s',
+  '98s','97s','96s','95s','94s','93s','92s',
+  '87s','86s','85s','84s','83s','82s',
+  '76s','75s','74s','73s','72s',
+  '65s','64s','63s','62s',
+  '54s','53s','52s',
+  '43s','42s','32s',
+  'AKo','AQo','AJo','ATo','A9o','A8o','A7o','A6o','A5o','A4o','A3o','A2o',
+  'KQo','KJo','KTo','K9o','K8o','K7o','K6o','K5o','K4o',
+  'QJo','QTo','Q9o',
+  'JTo','J9o',
+  'T9o',
+]);
+
+// HU BB defends ~65% — all suited, all pairs, Ax/Kx/top Qx offsuit
+const HU_BB_DEFENSE = new Set([
+  'AA','KK','QQ','JJ','TT','99','88','77','66','55','44','33','22',
+  'AKs','AQs','AJs','ATs','A9s','A8s','A7s','A6s','A5s','A4s','A3s','A2s',
+  'KQs','KJs','KTs','K9s','K8s','K7s','K6s','K5s','K4s','K3s','K2s',
+  'QJs','QTs','Q9s','Q8s','Q7s','Q6s','Q5s','Q4s','Q3s','Q2s',
+  'JTs','J9s','J8s','J7s','J6s','J5s','J4s','J3s','J2s',
+  'T9s','T8s','T7s','T6s','T5s','T4s','T3s','T2s',
+  '98s','97s','96s','95s','94s','93s','92s',
+  '87s','86s','85s','84s','83s','82s',
+  '76s','75s','74s','73s','72s',
+  '65s','64s','63s','62s',
+  '54s','53s','52s',
+  '43s','42s','32s',
+  'AKo','AQo','AJo','ATo','A9o','A8o','A7o','A6o','A5o','A4o','A3o','A2o',
+  'KQo','KJo','KTo','K9o','K8o',
+  'QJo','QTo','Q9o',
+  'JTo','J9o',
+]);
+
+// Short-handed (3-5 players): positions play significantly wider
+// HJ at a 5-max table plays like 6-max CO
+const SH_HJ_SET = CO_SET;
+// CO at a 5-max table plays like 6-max BTN
+const SH_CO_SET = BTN_SET;
+// BTN at a short-handed table: ~60%
+const SH_BTN_SET = new Set([
+  ...BTN_SET,
+  'Q5s','Q4s','Q3s','Q2s','J4s','J3s','J2s','T4s','T3s','T2s',
+  '93s','92s','84s','83s','73s','72s','63s','62s','52s','42s',
+  'K3o','K2o','Q7o','Q6o','J7o','J6o','T6o','97o','87o','76o',
+]);
+// SB at a short-handed table: ~65%
+const SH_SB_SET = new Set([
+  ...SH_BTN_SET,
+  'Q5o','Q4o','J8o','T7o','96o','86o','75o','65o','54o',
+]);
+// BB defense at short-handed table: very wide ~78%
+const SH_BB_DEFENSE = new Set([
+  ...BB_DEFENSE,
+  'K2o','K3o','Q5o','Q4o','Q3o','Q2o',
+  'J6o','J5o','J4o','T6o','T5o',
+  '96o','95o','86o','85o','75o','74o',
+  '65o','64o','54o','53o','43o',
+]);
+
+// Full Ring (7-9 players): tighter early-position ranges
+const FR_UTG_SET = new Set([
+  'AA','KK','QQ','JJ','TT','99','88',
+  'AKs','AQs','AJs','ATs','A9s','A8s','A7s','A6s','A5s',
+  'KQs','KJs','KTs',
+  'QJs','QTs',
+  'JTs',
+  'AKo','AQo',
+  'KQo',
+]);
+const FR_UTG2_SET = new Set([
+  ...FR_UTG_SET,
+  '77','A4s','A3s','A2s','K9s','Q9s','J9s','T9s','AJo',
+]);
+const FR_UTG3_SET = new Set([
+  ...FR_UTG2_SET,
+  '66','K8s','K7s','Q8s','J8s','98s','87s','ATo','KJo',
+]);
+const FR_MP_SET = new Set([
+  ...FR_UTG3_SET,
+  '55','44','K6s','K5s','Q7s','J7s','T8s','76s','65s',
+  'A9o','KTo','QJo',
+]);
+
+export const TABLE_FORMAT_RANGES: Record<TableFormat, Record<Position, Set<string>>> = {
+  hu: {
+    UTG: new Set(), UTG2: new Set(), UTG3: new Set(), MP: new Set(),
+    HJ: new Set(), CO: new Set(),
+    BTN: HU_BTN_RANGE, SB: HU_BTN_RANGE, BB: HU_BB_DEFENSE,
+  },
+  sh: {
+    UTG: new Set(), UTG2: new Set(), UTG3: new Set(), MP: new Set(),
+    HJ: SH_HJ_SET, CO: SH_CO_SET, BTN: SH_BTN_SET, SB: SH_SB_SET, BB: SH_BB_DEFENSE,
+  },
+  sixmax: GTO_RANGES,
+  fr: {
+    UTG: FR_UTG_SET, UTG2: FR_UTG2_SET, UTG3: FR_UTG3_SET, MP: FR_MP_SET,
+    HJ: HJ_SET, CO: CO_SET, BTN: BTN_SET, SB: SB_SET, BB: BB_DEFENSE,
+  },
+};
+
+export const FORMAT_POSITIONS: Record<TableFormat, Position[]> = {
+  hu:     ['BTN', 'BB'],
+  sh:     ['HJ', 'CO', 'BTN', 'SB', 'BB'],
+  sixmax: ['UTG', 'HJ', 'CO', 'BTN', 'SB', 'BB'],
+  fr:     ['UTG', 'UTG2', 'UTG3', 'MP', 'HJ', 'CO', 'BTN', 'SB', 'BB'],
+};
+
 // GTO-correct preflop action: uses the bot's actual cards vs position ranges.
 // No limping, no random variance — pure range adherence.
 // effectiveStack: the smaller of hero/villain stacks; adjusts range and action type.
