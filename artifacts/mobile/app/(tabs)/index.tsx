@@ -535,12 +535,26 @@ export default function PlayScreen() {
                           <Text style={styles.tableSetupPosText}>{pos}</Text>
                         </View>
                         <View style={styles.tableSetupChips}>
+                          {/* DEF chip */}
                           <TouchableOpacity
                             style={[styles.tableSetupChip, { borderColor: current === null ? '#3B82F6' : '#3B82F633', backgroundColor: current === null ? '#3B82F618' : 'transparent' }]}
                             onPress={() => setMathPlayerType(pos, null)}
                           >
                             <Text style={[styles.tableSetupChipText, { color: current === null ? '#3B82F6' : colors.mutedForeground }]}>DEF</Text>
                           </TouchableOpacity>
+                          {/* GTO chip */}
+                          {(() => {
+                            const isSel = current === 'gto';
+                            return (
+                              <TouchableOpacity
+                                style={[styles.tableSetupChip, { borderColor: isSel ? '#27AE60' : '#27AE6033', backgroundColor: isSel ? '#27AE6022' : 'transparent' }]}
+                                onPress={() => setMathPlayerType(pos, isSel ? null : 'gto')}
+                              >
+                                <Text style={[styles.tableSetupChipText, { color: isSel ? '#27AE60' : colors.mutedForeground }]}>GTO</Text>
+                              </TouchableOpacity>
+                            );
+                          })()}
+                          {/* Player type chips */}
                           {(['TAG', 'LAG', 'Nit', 'Fish', 'Maniac'] as PlayerType[]).map(t => {
                             const isSel = current === t;
                             const col = PLAYER_TYPE_INFO[t].color;

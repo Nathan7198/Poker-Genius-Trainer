@@ -50,8 +50,8 @@ export default function PlayerSeat({ player, showCards }: PlayerSeatProps) {
         ))}
       </View>
 
-      {/* Player type badge — GTO mode shows a neutral GTO label instead */}
-      {state.trainingMode === 'gto' ? (
+      {/* Player type badge — GTO players show a GTO label; archetypes show their type */}
+      {(state.trainingMode === 'gto' || player.useGTO) ? (
         <View style={[styles.typeBadge, { backgroundColor: '#27AE6022', borderColor: '#27AE6055' }]}>
           <Feather name="target" size={7} color="#27AE60" />
           <Text style={[styles.typeText, { color: '#27AE60' }]} numberOfLines={1}>GTO</Text>
