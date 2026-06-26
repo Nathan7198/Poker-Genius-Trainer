@@ -29,17 +29,20 @@ function cardLabel(rank: string, suit: string) {
   return `${rank}${SUIT_SYMBOLS[suit] ?? suit}`;
 }
 
-function TableSetupPanel({ colors, state, setMathPlayerType }: {
+function TableSetupPanel({ colors, state, setMathPlayerType, liveHand }: {
   colors: ReturnType<typeof import('@/hooks/useColors').useColors>;
   state: import('@/context/GameContext').GameState;
   setMathPlayerType: (pos: string, style: PlayerType | 'gto' | null) => void;
+  liveHand?: boolean;
 }) {
   const positions = getPositionsForSize(state.tableSize);
   return (
-    <View style={[styles.tableSetup, { backgroundColor: colors.card, borderColor: colors.border }]}>
+    <View style={[styles.tableSetup, { backgroundColor: colors.card, borderColor: colors.border, marginBottom: 12 }]}>
       <Text style={[styles.tableSetupHeader, { color: colors.gold }]}>TABLE SETUP</Text>
       <Text style={[styles.tableSetupSubtext, { color: colors.mutedForeground }]}>
-        Set opponent types per seat. Hero rotates — any seat can be yours.
+        {liveHand
+          ? 'Changes apply from the next hand.'
+          : 'Set opponent types per seat. Hero rotates — any seat can be yours.'}
       </Text>
       {positions.map(pos => {
         const posColor = POSITION_COLORS[pos] ?? '#888';
@@ -539,10 +542,7 @@ export default function PlayScreen() {
         {/* Idle */}
         {isIdle && (
           state.trainingMode === 'custom' ? (
-            <>
-              <CustomSetup />
-              <TableSetupPanel colors={colors} state={state} setMathPlayerType={setMathPlayerType} />
-            </>
+            <CustomSetup />
           ) : state.gameFormat === 'tournament' && state.tournamentStacks.hero <= 0 ? (
             <View style={styles.centerActions}>
               <View style={[styles.eliminatedBadge, { backgroundColor: '#E74C3C18', borderColor: '#E74C3C55' }]}>
@@ -577,9 +577,6 @@ export default function PlayScreen() {
               <Text style={[styles.idleSubtext, { color: colors.mutedForeground }]}>
                 Hero always at bottom · Boards never repeat · Full street coaching
               </Text>
-
-              {/* Per-seat player type setup */}
-              <TableSetupPanel colors={colors} state={state} setMathPlayerType={setMathPlayerType} />
 
               {/* App feature guide */}
               <View style={[styles.featureGuide, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -644,6 +641,16 @@ export default function PlayScreen() {
         {/* Math mode live panel — user scrolls down to see it */}
         {state.trainingMode === 'math' && !isIdle && !isShowdown && !state.showAnalysis && (
           <MathPanel />
+        )}
+
+        {/* Table setup — always accessible, scroll down to change for next hand */}
+        {state.trainingMode !== 'custom' && (
+          <TableSetupPanel
+            colors={colors}
+            state={state}
+            setMathPlayerType={setMathPlayerType}
+            liveHand={!isIdle && !isShowdown}
+          />
         )}
 
       </ScrollView>
