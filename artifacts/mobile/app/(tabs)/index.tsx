@@ -29,6 +29,62 @@ function cardLabel(rank: string, suit: string) {
   return `${rank}${SUIT_SYMBOLS[suit] ?? suit}`;
 }
 
+function TableSetupPanel({ colors, state, setMathPlayerType }: {
+  colors: ReturnType<typeof import('@/hooks/useColors').useColors>;
+  state: import('@/context/GameContext').GameState;
+  setMathPlayerType: (pos: string, style: PlayerType | 'gto' | null) => void;
+}) {
+  const positions = getPositionsForSize(state.tableSize);
+  return (
+    <View style={[styles.tableSetup, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <Text style={[styles.tableSetupHeader, { color: colors.gold }]}>TABLE SETUP</Text>
+      <Text style={[styles.tableSetupSubtext, { color: colors.mutedForeground }]}>
+        Set opponent types per seat. Hero rotates — any seat can be yours.
+      </Text>
+      {positions.map(pos => {
+        const posColor = POSITION_COLORS[pos] ?? '#888';
+        const current = state.mathPlayerTypes[pos] ?? null;
+        return (
+          <View key={pos} style={styles.tableSetupRow}>
+            <View style={[styles.tableSetupPosBadge, { backgroundColor: posColor }]}>
+              <Text style={styles.tableSetupPosText}>{pos}</Text>
+            </View>
+            <View style={styles.tableSetupChips}>
+              <TouchableOpacity
+                style={[styles.tableSetupChip, { borderColor: current === null ? colors.gold : colors.border, backgroundColor: current === null ? colors.gold + '22' : 'transparent' }]}
+                onPress={() => setMathPlayerType(pos, null)}
+              >
+                <Text style={[styles.tableSetupChipText, { color: current === null ? colors.gold : colors.mutedForeground }]}>DEF</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.tableSetupChip, { borderColor: current === 'gto' ? '#27AE60' : '#27AE6033', backgroundColor: current === 'gto' ? '#27AE6022' : 'transparent' }]}
+                onPress={() => setMathPlayerType(pos, current === 'gto' ? null : 'gto')}
+              >
+                <Text style={[styles.tableSetupChipText, { color: current === 'gto' ? '#27AE60' : colors.mutedForeground }]}>GTO</Text>
+              </TouchableOpacity>
+              {(['TAG', 'LAG', 'Nit', 'Fish', 'Maniac'] as PlayerType[]).map(t => {
+                const isSel = current === t;
+                const col = PLAYER_TYPE_INFO[t].color;
+                return (
+                  <TouchableOpacity
+                    key={t}
+                    style={[styles.tableSetupChip, { borderColor: isSel ? col : col + '44', backgroundColor: isSel ? col + '22' : 'transparent' }]}
+                    onPress={() => setMathPlayerType(pos, isSel ? null : t)}
+                  >
+                    <Text style={[styles.tableSetupChipText, { color: isSel ? col : colors.mutedForeground }]}>
+                      {t === 'Maniac' ? 'MNI' : t}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
 export default function PlayScreen() {
   const { state, startNewHand, setDifficulty, setTrainingMode, setMathBotStyle, setMathPlayerType, setTableSize, setGameFormat, goIdle } = useGame();
   const { logHandHistory, recordHandResult } = useStats();
@@ -483,7 +539,10 @@ export default function PlayScreen() {
         {/* Idle */}
         {isIdle && (
           state.trainingMode === 'custom' ? (
-            <CustomSetup />
+            <>
+              <CustomSetup />
+              <TableSetupPanel colors={colors} state={state} setMathPlayerType={setMathPlayerType} />
+            </>
           ) : state.gameFormat === 'tournament' && state.tournamentStacks.hero <= 0 ? (
             <View style={styles.centerActions}>
               <View style={[styles.eliminatedBadge, { backgroundColor: '#E74C3C18', borderColor: '#E74C3C55' }]}>
@@ -519,63 +578,8 @@ export default function PlayScreen() {
                 Hero always at bottom · Boards never repeat · Full street coaching
               </Text>
 
-              {/* Per-seat player type setup (math mode only) */}
-              {state.trainingMode === 'math' && (
-                <View style={[styles.tableSetup, { backgroundColor: colors.card, borderColor: '#3B82F630' }]}>
-                  <Text style={[styles.tableSetupHeader, { color: '#3B82F6' }]}>TABLE SETUP</Text>
-                  <Text style={[styles.tableSetupSubtext, { color: colors.mutedForeground }]}>
-                    Set an opponent type for each seat. Hero position rotates — any seat can be you.
-                  </Text>
-                  {getPositionsForSize(state.tableSize).map(pos => {
-                    const posColor = POSITION_COLORS[pos] ?? '#888';
-                    const current = state.mathPlayerTypes[pos] ?? null;
-                    return (
-                      <View key={pos} style={styles.tableSetupRow}>
-                        <View style={[styles.tableSetupPosBadge, { backgroundColor: posColor }]}>
-                          <Text style={styles.tableSetupPosText}>{pos}</Text>
-                        </View>
-                        <View style={styles.tableSetupChips}>
-                          {/* DEF chip */}
-                          <TouchableOpacity
-                            style={[styles.tableSetupChip, { borderColor: current === null ? '#3B82F6' : '#3B82F633', backgroundColor: current === null ? '#3B82F618' : 'transparent' }]}
-                            onPress={() => setMathPlayerType(pos, null)}
-                          >
-                            <Text style={[styles.tableSetupChipText, { color: current === null ? '#3B82F6' : colors.mutedForeground }]}>DEF</Text>
-                          </TouchableOpacity>
-                          {/* GTO chip */}
-                          {(() => {
-                            const isSel = current === 'gto';
-                            return (
-                              <TouchableOpacity
-                                style={[styles.tableSetupChip, { borderColor: isSel ? '#27AE60' : '#27AE6033', backgroundColor: isSel ? '#27AE6022' : 'transparent' }]}
-                                onPress={() => setMathPlayerType(pos, isSel ? null : 'gto')}
-                              >
-                                <Text style={[styles.tableSetupChipText, { color: isSel ? '#27AE60' : colors.mutedForeground }]}>GTO</Text>
-                              </TouchableOpacity>
-                            );
-                          })()}
-                          {/* Player type chips */}
-                          {(['TAG', 'LAG', 'Nit', 'Fish', 'Maniac'] as PlayerType[]).map(t => {
-                            const isSel = current === t;
-                            const col = PLAYER_TYPE_INFO[t].color;
-                            return (
-                              <TouchableOpacity
-                                key={t}
-                                style={[styles.tableSetupChip, { borderColor: isSel ? col : col + '44', backgroundColor: isSel ? col + '22' : 'transparent' }]}
-                                onPress={() => setMathPlayerType(pos, isSel ? null : t)}
-                              >
-                                <Text style={[styles.tableSetupChipText, { color: isSel ? col : colors.mutedForeground }]}>
-                                  {t === 'Maniac' ? 'MNI' : t}
-                                </Text>
-                              </TouchableOpacity>
-                            );
-                          })}
-                        </View>
-                      </View>
-                    );
-                  })}
-                </View>
-              )}
+              {/* Per-seat player type setup */}
+              <TableSetupPanel colors={colors} state={state} setMathPlayerType={setMathPlayerType} />
 
               {/* App feature guide */}
               <View style={[styles.featureGuide, { backgroundColor: colors.card, borderColor: colors.border }]}>

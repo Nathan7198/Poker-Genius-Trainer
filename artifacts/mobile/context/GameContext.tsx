@@ -670,8 +670,8 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           const tournamentStack = state.gameFormat === 'tournament'
             ? Math.max(0, baseStack - (pos === 'BB' ? 1 : pos === 'SB' ? 0.5 : 0))
             : baseStack;
-          // Math mode: per-position override → global mathBotStyle → rotating default
-          const posOverride = state.trainingMode === 'math' ? state.mathPlayerTypes[pos] : undefined;
+          // Per-position override (all modes) → global mathBotStyle (math) → rotating default
+          const posOverride = state.mathPlayerTypes[pos];
           const globalIsGTO = state.trainingMode === 'gto' || (state.trainingMode === 'math' && state.mathBotStyle === 'gto');
           const botUseGTO = posOverride === 'gto' || (!posOverride && globalIsGTO);
           const botType: PlayerType = (posOverride && posOverride !== 'gto')
@@ -1564,22 +1564,28 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         const [h, r] = dealCards(workDeck, 1); heroCards.push(h[0]); workDeck = r;
       }
 
-      // Opponent type (random cycles through 5 unique types)
+      // Opponent type: per-seat override first, then config type, then cycling default
       const UNIQUE_TYPES: PlayerType[] = ['TAG', 'LAG', 'Nit', 'Fish', 'Maniac'];
-      const oppType = cfg.opponentType ?? UNIQUE_TYPES[state.handNumber % UNIQUE_TYPES.length];
+      const defaultOppType = cfg.opponentType ?? UNIQUE_TYPES[state.handNumber % UNIQUE_TYPES.length];
 
-      // Bot players (all same type as configured)
+      // Bot players — apply per-seat overrides from mathPlayerTypes
       const otherPositions = POSITIONS.filter(p => p !== heroPosition);
       const botPlayers: BotPlayer[] = [];
       for (let i = 0; i < Math.min(5, otherPositions.length); i++) {
+        const pos = otherPositions[i];
         const [bc, r] = dealCards(workDeck, 2); workDeck = r;
+        const posOverride = state.mathPlayerTypes[pos];
+        const botUseGTO = posOverride === 'gto';
+        const botType: PlayerType = (posOverride && posOverride !== 'gto')
+          ? posOverride
+          : defaultOppType;
         botPlayers.push({
           id: i, name: PLAYER_NAMES[i % PLAYER_NAMES.length],
-          type: oppType, position: otherPositions[i],
+          type: botType, useGTO: botUseGTO, position: pos,
           cards: bc.map(c => ({ ...c, faceUp: false })),
-          stack: otherPositions[i] === 'BB' ? 99 : otherPositions[i] === 'SB' ? 99.5 : 100,
+          stack: pos === 'BB' ? 99 : pos === 'SB' ? 99.5 : 100,
           currentBet: 0, action: null, isActive: true,
-          isDealer: otherPositions[i] === 'BTN',
+          isDealer: pos === 'BTN',
         });
       }
 
@@ -1598,7 +1604,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       const newRecentSigs = [...state.recentBoardSigs.slice(-(BOARD_SIG_WINDOW - 1)), sig];
 
       if (cfg.startStreet === 'preflop') {
-        const { players: updatedPlayers, actionCtx, pot } = simulateBotPreflop(botPlayers, heroPosition, (state.trainingMode === 'gto' || state.mainVillainUseGTO));
+        const { players: updatedPlayers, actionCtx, pot } = simulateBotPreflop(botPlayers, heroPosition, false);
         const mainVillain = getMainVillain(updatedPlayers);
         return {
           ...state,
@@ -1611,6 +1617,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           postFlopAnalysisHistory: [], showAnalysis: false,
           lastHeroAction: null, heroIsAggressor: false, villainPostFlopAction: null,
           mainVillainType: mainVillain.type, mainVillainPosition: mainVillain.position,
+          mainVillainUseGTO: mainVillain.useGTO,
           heroActsFirst: false, postFlopStreetsDone: [],
           recentBoardSigs: newRecentSigs,
           showdownResult: null, villainFolded: false,
@@ -1637,11 +1644,12 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       const customVillainPos: Position = firstBotBeforeHeroC
         ?? getMainVillain(botPlayers).position;
       const customVillainPlayer = botPlayers.find(p => p.position === customVillainPos) ?? botPlayers[0];
+      const customMainVillainUseGTO = customVillainPlayer.useGTO;
       const visBoard = revealedComm.filter(c => c.faceUp);
       const _customTexture = analyzeBoardTexture(visBoard).texture;
       const villain = heroActsFirst
         ? null
-        : (state.trainingMode === 'gto' || state.mainVillainUseGTO)
+        : (state.trainingMode === 'gto' || customMainVillainUseGTO)
           ? simulateVillainGTOPostFlop(_customTexture, startPot, 'none', customVillainPlayer.cards, visBoard)
           : simulateVillainPostFlop(customVillainPlayer.type, _customTexture, startPot, 'none', customVillainPlayer.cards, visBoard);
       const finalPot = startPot + (villain?.betBB ?? 0);
@@ -1659,6 +1667,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         showAnalysis: false, lastHeroAction: null, heroIsAggressor: false,
         villainPostFlopAction: villain,
         mainVillainType: customVillainPlayer.type, mainVillainPosition: customVillainPos,
+        mainVillainUseGTO: customMainVillainUseGTO,
         heroActsFirst, postFlopStreetsDone: [],
         recentBoardSigs: newRecentSigs,
         showdownResult: null, villainFolded: false, heroCheckedStreet: null,
