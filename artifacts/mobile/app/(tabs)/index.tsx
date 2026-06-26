@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View,
+  Animated, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Feather } from '@expo/vector-icons';
@@ -44,6 +44,19 @@ export default function PlayScreen() {
   const [modeBtnY, setModeBtnY] = React.useState(0);
   const [modeBtnX, setModeBtnX] = React.useState(0);
   const [modeBtnH, setModeBtnH] = React.useState(0);
+
+  const bounceAnim = React.useRef(new Animated.Value(0)).current;
+  React.useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(bounceAnim, { toValue: 5, duration: 550, useNativeDriver: true }),
+        Animated.timing(bounceAnim, { toValue: 0, duration: 550, useNativeDriver: true }),
+      ])
+    );
+    if (state.trainingMode === 'math') loop.start();
+    else loop.stop();
+    return () => loop.stop();
+  }, [state.trainingMode]);
 
   const lastLoggedHand = React.useRef<number>(-1);
 
@@ -552,9 +565,16 @@ export default function PlayScreen() {
           )
         )}
 
-        {/* Math mode live panel */}
+        {/* Math mode scroll indicator + live panel */}
         {state.trainingMode === 'math' && !isIdle && !isShowdown && !state.showAnalysis && (
-          <MathPanel />
+          <>
+            <Animated.View style={[styles.mathScrollHint, { transform: [{ translateY: bounceAnim }] }]}>
+              <Feather name="chevrons-down" size={13} color="#3B82F6" />
+              <Text style={styles.mathScrollHintText}>SCROLL DOWN FOR POKER MATH</Text>
+              <Feather name="chevrons-down" size={13} color="#3B82F6" />
+            </Animated.View>
+            <MathPanel />
+          </>
         )}
 
       </ScrollView>
@@ -736,6 +756,8 @@ const styles = StyleSheet.create({
   dealBtn: { paddingVertical: 16, paddingHorizontal: 48, borderRadius: 14, alignItems: 'center' },
   dealBtnText: { fontSize: 18, fontWeight: '900', letterSpacing: 2 },
   idleSubtext: { fontSize: 11, textAlign: 'center', fontStyle: 'italic' },
+  mathScrollHint: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 10, marginBottom: 2, backgroundColor: '#3B82F612', borderRadius: 20, alignSelf: 'center', paddingHorizontal: 14, paddingVertical: 6, borderWidth: 1, borderColor: '#3B82F630' },
+  mathScrollHintText: { color: '#3B82F6', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
   featureGuide: { borderRadius: 12, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 4, alignSelf: 'stretch' },
   featureRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 10, gap: 10 },
   featureText: { flex: 1 },
