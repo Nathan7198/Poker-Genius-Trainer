@@ -97,6 +97,7 @@ export default function PlayScreen() {
   const [showModePicker, setShowModePicker] = React.useState(false);
   const [showTablePicker, setShowTablePicker] = React.useState(false);
   const [showFormatPicker, setShowFormatPicker] = React.useState(false);
+  const [showSeatsPicker, setShowSeatsPicker] = React.useState(false);
   const [expandCustomSizes, setExpandCustomSizes] = React.useState(false);
   const [showHandReport, setShowHandReport] = React.useState(false);
   const isPreflopMode = state.trainingMode === 'preflop';
@@ -301,7 +302,7 @@ export default function PlayScreen() {
           >
             <TouchableOpacity
               style={[styles.modeBtn, { borderColor: '#33333366' }]}
-              onPress={() => { setShowModePicker(!showModePicker); setShowDifficultyPicker(false); setShowTablePicker(false); setShowFormatPicker(false); }}
+              onPress={() => { setShowModePicker(!showModePicker); setShowDifficultyPicker(false); setShowTablePicker(false); setShowFormatPicker(false); setShowSeatsPicker(false); }}
             >
               <Text style={styles.modeBtnLabel}>MODE</Text>
               <Text style={[styles.modeBtnText, {
@@ -321,7 +322,7 @@ export default function PlayScreen() {
           </View>
           <TouchableOpacity
             style={[styles.tableBtn, { borderColor: isCustomSize ? colors.goldLight + '66' : '#33333366', backgroundColor: isCustomSize ? '#A8882A15' : '#181818' }]}
-            onPress={() => { setShowTablePicker(!showTablePicker); setShowModePicker(false); setShowDifficultyPicker(false); setShowFormatPicker(false); }}
+            onPress={() => { setShowTablePicker(!showTablePicker); setShowModePicker(false); setShowDifficultyPicker(false); setShowFormatPicker(false); setShowSeatsPicker(false); }}
           >
             <Text style={styles.tableBtnLabel}>TABLE</Text>
             <Text style={[styles.tableBtnText, { color: isCustomSize ? colors.goldLight : colors.foreground }]}>{tableBtnText}</Text>
@@ -331,7 +332,7 @@ export default function PlayScreen() {
               borderColor: state.gameFormat === 'tournament' ? '#E5C76B66' : '#33333366',
               backgroundColor: state.gameFormat === 'tournament' ? '#A8882A15' : '#181818',
             }]}
-            onPress={() => { setShowFormatPicker(!showFormatPicker); setShowModePicker(false); setShowTablePicker(false); setShowDifficultyPicker(false); }}
+            onPress={() => { setShowFormatPicker(!showFormatPicker); setShowModePicker(false); setShowTablePicker(false); setShowDifficultyPicker(false); setShowSeatsPicker(false); }}
           >
             <Text style={styles.formatBtnLabel}>FORMAT</Text>
             <Text style={[styles.formatBtnText, { color: state.gameFormat === 'tournament' ? colors.goldLight : colors.foreground }]} numberOfLines={1}>
@@ -339,8 +340,17 @@ export default function PlayScreen() {
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
+            style={[styles.seatsBtn, { borderColor: Object.keys(state.mathPlayerTypes).length > 0 ? colors.goldLight + '66' : '#33333366', backgroundColor: Object.keys(state.mathPlayerTypes).length > 0 ? '#A8882A15' : '#181818' }]}
+            onPress={() => { setShowSeatsPicker(!showSeatsPicker); setShowModePicker(false); setShowTablePicker(false); setShowFormatPicker(false); setShowDifficultyPicker(false); }}
+          >
+            <Text style={styles.seatsBtnLabel}>SEATS</Text>
+            <Text style={[styles.seatsBtnText, { color: Object.keys(state.mathPlayerTypes).length > 0 ? colors.goldLight : colors.foreground }]} numberOfLines={1}>
+              {Object.keys(state.mathPlayerTypes).length > 0 ? `${Object.keys(state.mathPlayerTypes).length} set` : 'Default'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
             style={[styles.diffBtn, { backgroundColor: diffColors[state.difficulty] + '22', borderColor: diffColors[state.difficulty] + '66' }]}
-            onPress={() => { setShowDifficultyPicker(!showDifficultyPicker); setShowModePicker(false); setShowTablePicker(false); setShowFormatPicker(false); }}
+            onPress={() => { setShowDifficultyPicker(!showDifficultyPicker); setShowModePicker(false); setShowTablePicker(false); setShowFormatPicker(false); setShowSeatsPicker(false); }}
           >
             <Text style={styles.diffBtnLabel}>DIFFICULTY</Text>
             <Text style={[styles.diffBtnText, { color: diffColors[state.difficulty] }]} numberOfLines={1}>
@@ -418,6 +428,56 @@ export default function PlayScreen() {
                 </View>
                 <Text style={[styles.formatOptionDesc, { color: colors.mutedForeground }]}>{desc}</Text>
               </TouchableOpacity>
+            );
+          })}
+        </View>
+      )}
+
+      {/* Seats picker */}
+      {showSeatsPicker && (
+        <View style={[styles.seatsPicker, { backgroundColor: colors.card, borderColor: colors.border, top: modeBtnY + modeBtnH + 4 }]}>
+          <Text style={[styles.seatsPickerHeader, { color: colors.gold, borderBottomColor: colors.border }]}>TABLE SETUP</Text>
+          <Text style={[styles.seatsPickerSub, { color: colors.mutedForeground }]}>
+            Tap a type to assign it to that seat. DEF uses the mode default.
+          </Text>
+          {getPositionsForSize(state.tableSize).map(pos => {
+            const posColor = POSITION_COLORS[pos] ?? '#888';
+            const current = state.mathPlayerTypes[pos] ?? null;
+            return (
+              <View key={pos} style={styles.seatsPickerRow}>
+                <View style={[styles.seatsPickerPosBadge, { backgroundColor: posColor }]}>
+                  <Text style={styles.seatsPickerPosText}>{pos}</Text>
+                </View>
+                <View style={styles.seatsPickerChips}>
+                  <TouchableOpacity
+                    style={[styles.seatsPickerChip, { borderColor: current === null ? colors.gold : colors.border, backgroundColor: current === null ? colors.gold + '22' : 'transparent' }]}
+                    onPress={() => setMathPlayerType(pos, null)}
+                  >
+                    <Text style={[styles.seatsPickerChipText, { color: current === null ? colors.gold : colors.mutedForeground }]}>DEF</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.seatsPickerChip, { borderColor: current === 'gto' ? '#27AE60' : '#27AE6033', backgroundColor: current === 'gto' ? '#27AE6022' : 'transparent' }]}
+                    onPress={() => setMathPlayerType(pos, current === 'gto' ? null : 'gto')}
+                  >
+                    <Text style={[styles.seatsPickerChipText, { color: current === 'gto' ? '#27AE60' : colors.mutedForeground }]}>GTO</Text>
+                  </TouchableOpacity>
+                  {(['TAG', 'LAG', 'Nit', 'Fish', 'Maniac'] as PlayerType[]).map(t => {
+                    const isSel = current === t;
+                    const col = PLAYER_TYPE_INFO[t].color;
+                    return (
+                      <TouchableOpacity
+                        key={t}
+                        style={[styles.seatsPickerChip, { borderColor: isSel ? col : col + '44', backgroundColor: isSel ? col + '22' : 'transparent' }]}
+                        onPress={() => setMathPlayerType(pos, isSel ? null : t)}
+                      >
+                        <Text style={[styles.seatsPickerChipText, { color: isSel ? col : colors.mutedForeground }]}>
+                          {t === 'Maniac' ? 'MNI' : t}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
             );
           })}
         </View>
@@ -643,15 +703,6 @@ export default function PlayScreen() {
           <MathPanel />
         )}
 
-        {/* Table setup — always accessible, scroll down to change for next hand */}
-        {state.trainingMode !== 'custom' && (
-          <TableSetupPanel
-            colors={colors}
-            state={state}
-            setMathPlayerType={setMathPlayerType}
-            liveHand={!isIdle && !isShowdown}
-          />
-        )}
 
       </ScrollView>
 
@@ -838,6 +889,24 @@ const styles = StyleSheet.create({
   formatOptionRow: { flexDirection: 'row', alignItems: 'center' },
   formatOptionName: { fontSize: 14, fontWeight: '700' },
   formatOptionDesc: { fontSize: 11, marginTop: 2, lineHeight: 15 },
+  seatsBtn: { flex: 1, paddingHorizontal: 4, paddingVertical: 5, borderRadius: 8, borderWidth: 1, alignItems: 'center' },
+  seatsBtnLabel: { fontSize: 8, fontWeight: '700', letterSpacing: 1.5, color: '#888', marginBottom: 1 },
+  seatsBtnText: { fontSize: 12, fontWeight: '800', letterSpacing: 0.3 },
+  seatsPicker: {
+    position: 'absolute', left: 12, right: 12, zIndex: 100,
+    borderRadius: 12, borderWidth: 1,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5, shadowRadius: 8, elevation: 10,
+    paddingBottom: 8,
+  },
+  seatsPickerHeader: { fontSize: 10, fontWeight: '900', letterSpacing: 2, paddingHorizontal: 14, paddingTop: 12, paddingBottom: 8, borderBottomWidth: 1 },
+  seatsPickerSub: { fontSize: 10, lineHeight: 14, paddingHorizontal: 14, paddingTop: 8, paddingBottom: 4 },
+  seatsPickerRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 5 },
+  seatsPickerPosBadge: { paddingHorizontal: 6, paddingVertical: 3, borderRadius: 4, minWidth: 38, alignItems: 'center' },
+  seatsPickerPosText: { color: '#FFF', fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
+  seatsPickerChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, flex: 1 },
+  seatsPickerChip: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 5, borderWidth: 1 },
+  seatsPickerChipText: { fontSize: 9, fontWeight: '800', letterSpacing: 0.3 },
   tourneyChips: {
     borderRadius: 12, borderWidth: 1, paddingVertical: 12, paddingHorizontal: 20,
     alignItems: 'center', minWidth: 200,
