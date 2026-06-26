@@ -16,9 +16,10 @@ import HandReportModal from '@/components/HandReportModal';
 import CustomSetup from '@/components/CustomSetup';
 import {
   DIFFICULTIES, DIFFICULTY_DESCRIPTIONS, getHandNotation,
-  evaluateMadeHand, MADE_HAND_COLORS, PREFLOP_ORDER,
+  evaluateMadeHand, MADE_HAND_COLORS, PREFLOP_ORDER, PLAYER_TYPE_INFO,
 } from '@/constants/pokerData';
-import type { Difficulty } from '@/constants/pokerData';
+import type { Difficulty, PlayerType } from '@/constants/pokerData';
+import MathPanel from '@/components/MathPanel';
 
 const SUIT_SYMBOLS: Record<string, string> = { s: '♠', h: '♥', d: '♦', c: '♣' };
 const SUIT_COLORS: Record<string, string> = { s: '#94A3B8', h: '#EF4444', d: '#EF4444', c: '#94A3B8' };
@@ -28,7 +29,7 @@ function cardLabel(rank: string, suit: string) {
 }
 
 export default function PlayScreen() {
-  const { state, startNewHand, setDifficulty, setTrainingMode, setTableSize, setGameFormat, goIdle } = useGame();
+  const { state, startNewHand, setDifficulty, setTrainingMode, setMathBotStyle, setTableSize, setGameFormat, goIdle } = useGame();
   const { logHandHistory, recordHandResult } = useStats();
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -219,11 +220,13 @@ export default function PlayScreen() {
               <Text style={styles.modeBtnLabel}>MODE</Text>
               <Text style={[styles.modeBtnText, {
                 color: state.trainingMode === 'gto' ? '#27AE60'
+                  : state.trainingMode === 'math' ? '#3B82F6'
                   : state.trainingMode === 'custom' ? '#3498DB'
                   : isPreflopMode ? colors.goldLight
                   : colors.foreground,
               }]} numberOfLines={1}>
                 {state.trainingMode === 'gto' ? 'GTO'
+                  : state.trainingMode === 'math' ? 'Math'
                   : state.trainingMode === 'custom' ? 'Custom'
                   : isPreflopMode ? 'Pre Flop'
                   : 'Full Hands'}
@@ -268,20 +271,41 @@ export default function PlayScreen() {
             ['full',    'Full Hands', 'Play street-by-street with pot odds, equity, and post-flop coaching.'],
             ['preflop', 'Pre Flop',   'Preflop-only drill — practice opens, calls, and 3-bets without seeing the board.'],
             ['gto',     'GTO Mode',   'Face GTO-calibrated bots with no hints. Compare your decision to optimal play after.'],
+            ['math',    'Poker Math', 'Full hands with a live math panel — equity, pot odds, EV, and draw outs explained every street.'],
             ['custom',  'Custom',     'Set up a specific hand, position, and board texture to study a scenario.'],
           ] as const).map(([val, label, desc]) => {
             const isSelected = state.trainingMode === val;
             return (
               <TouchableOpacity
                 key={val}
-                style={[styles.modeOption, isSelected && { backgroundColor: '#A8882A18' }]}
+                style={[styles.modeOption, isSelected && { backgroundColor: '#3B82F618' }]}
                 onPress={() => { setTrainingMode(val); setShowModePicker(false); }}
               >
                 <View style={styles.modeOptionRow}>
-                  <Feather name="check" size={13} color={isSelected ? colors.goldLight : 'transparent'} style={{ marginRight: 6 }} />
-                  <Text style={[styles.modeOptionText, { color: isSelected ? colors.goldLight : colors.foreground }]}>{label}</Text>
+                  <Feather name="check" size={13} color={isSelected ? (val === 'math' ? '#3B82F6' : colors.goldLight) : 'transparent'} style={{ marginRight: 6 }} />
+                  <Text style={[styles.modeOptionText, { color: isSelected ? (val === 'math' ? '#3B82F6' : colors.goldLight) : colors.foreground }]}>{label}</Text>
                 </View>
                 <Text style={[styles.modeOptionDesc, { color: colors.mutedForeground }]}>{desc}</Text>
+                {/* Bot style sub-selector for math mode */}
+                {val === 'math' && isSelected && (
+                  <View style={styles.mathBotStyleRow}>
+                    {(['gto', 'TAG', 'LAG', 'Nit', 'Fish', 'Maniac'] as const).map(s => {
+                      const isSel = state.mathBotStyle === s;
+                      const col = s === 'gto' ? '#27AE60' : PLAYER_TYPE_INFO[s as PlayerType].color;
+                      return (
+                        <TouchableOpacity
+                          key={s}
+                          style={[styles.mathBotChip, { borderColor: isSel ? col : col + '44', backgroundColor: isSel ? col + '25' : 'transparent' }]}
+                          onPress={() => setMathBotStyle(s)}
+                        >
+                          <Text style={[styles.mathBotChipText, { color: isSel ? col : colors.mutedForeground }]}>
+                            {s === 'gto' ? 'GTO' : PLAYER_TYPE_INFO[s as PlayerType].shortLabel}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
               </TouchableOpacity>
             );
           })}
@@ -528,6 +552,11 @@ export default function PlayScreen() {
           )
         )}
 
+        {/* Math mode live panel */}
+        {state.trainingMode === 'math' && !isIdle && !isShowdown && !state.showAnalysis && (
+          <MathPanel />
+        )}
+
       </ScrollView>
 
       {/* Showdown footer — always fully visible, no scrolling needed */}
@@ -639,6 +668,9 @@ const styles = StyleSheet.create({
   modeOptionRow: { flexDirection: 'row', alignItems: 'center' },
   modeOptionText: { fontSize: 14, fontWeight: '700' },
   modeOptionDesc: { fontSize: 11, marginTop: 2, lineHeight: 15 },
+  mathBotStyleRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 8 },
+  mathBotChip: { paddingHorizontal: 9, paddingVertical: 4, borderRadius: 6, borderWidth: 1 },
+  mathBotChipText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
   diffBtn: { flex: 1, paddingHorizontal: 4, paddingVertical: 5, borderRadius: 8, borderWidth: 1, alignItems: 'center' },
   diffBtnLabel: { fontSize: 8, fontWeight: '700', letterSpacing: 1.5, color: '#888', marginBottom: 1 },
   diffBtnText: { fontSize: 12, fontWeight: '800', letterSpacing: 0.3 },

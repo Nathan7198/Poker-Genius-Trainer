@@ -145,8 +145,10 @@ export interface GameState {
   heroCheckedStreet: PostFlopStreet | null;
   /** Total chips hero has put into the pot this hand (for profit tracking) */
   heroTotalInvestedBB: number;
-  /** 'full' = all streets, 'preflop' = preflop drill only, 'gto' = full hand with always-on GTO coaching, 'custom' = user-configured scenario */
-  trainingMode: 'full' | 'preflop' | 'gto' | 'custom';
+  /** 'full' = all streets, 'preflop' = preflop drill only, 'gto' = GTO bots no hints, 'custom' = configured scenario, 'math' = detailed math coaching with configurable bots */
+  trainingMode: 'full' | 'preflop' | 'gto' | 'custom' | 'math';
+  /** Bot style for math mode — 'gto' or a player archetype */
+  mathBotStyle: 'gto' | PlayerType;
   /** Number of players at the table (2–9). Default 6 (6-max). */
   tableSize: number;
   /** Non-hero positions still active in the hand (post-preflop) */
@@ -163,7 +165,8 @@ export interface GameState {
 
 type GameAction =
   | { type: 'SET_DIFFICULTY'; difficulty: Difficulty }
-  | { type: 'SET_TRAINING_MODE'; mode: 'full' | 'preflop' | 'gto' | 'custom' }
+  | { type: 'SET_TRAINING_MODE'; mode: 'full' | 'preflop' | 'gto' | 'custom' | 'math' }
+  | { type: 'SET_MATH_BOT_STYLE'; style: 'gto' | PlayerType }
   | { type: 'SET_TABLE_SIZE'; tableSize: number }
   | { type: 'SET_GAME_FORMAT'; format: 'cash' | 'tournament' }
   | { type: 'START_HAND' }
@@ -193,7 +196,7 @@ function buildInitialState(): GameState {
     postFlopStreetsDone: [], recentBoardSigs: [],
     showdownResult: null, villainFolded: false,
     heroCheckedStreet: null, heroTotalInvestedBB: 0,
-    trainingMode: 'full', tableSize: 6,
+    trainingMode: 'full', mathBotStyle: 'gto', tableSize: 6,
     handActivePlayers: [], playerStreetActions: {},
     gameFormat: 'cash',
     tournamentStacks: { hero: 100, bots: {} },
@@ -567,6 +570,9 @@ function gameReducer(state: GameState, action: GameAction): GameState {
     case 'SET_TRAINING_MODE':
       return { ...state, trainingMode: action.mode };
 
+    case 'SET_MATH_BOT_STYLE':
+      return { ...state, mathBotStyle: action.style };
+
     case 'SET_TABLE_SIZE':
       return { ...state, tableSize: Math.max(2, Math.min(9, action.tableSize)) };
 
@@ -646,9 +652,13 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           const tournamentStack = state.gameFormat === 'tournament'
             ? Math.max(0, baseStack - (pos === 'BB' ? 1 : pos === 'SB' ? 0.5 : 0))
             : baseStack;
+          // Math mode: use the selected bot archetype for all bots when not GTO
+          const botType: PlayerType = state.trainingMode === 'math' && state.mathBotStyle !== 'gto'
+            ? state.mathBotStyle as PlayerType
+            : PLAYER_TYPE_LIST[i % PLAYER_TYPE_LIST.length];
           players.push({
             id: i, name: PLAYER_NAMES[i % PLAYER_NAMES.length],
-            type: PLAYER_TYPE_LIST[i % PLAYER_TYPE_LIST.length],
+            type: botType,
             position: pos,
             cards: botCards.map(c => ({ ...c, faceUp: false })),
             stack: state.gameFormat === 'tournament' ? tournamentStack : baseStack,
@@ -666,7 +676,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       deck = deck.slice(5);
 
       const faceDown = communityCards.map(c => ({ ...c, faceUp: false }));
-      const { players: updatedPlayers, actionCtx, pot } = simulateBotPreflop(players, heroPosition, state.trainingMode === 'gto');
+      const { players: updatedPlayers, actionCtx, pot } = simulateBotPreflop(players, heroPosition, (state.trainingMode === 'gto' || (state.trainingMode === 'math' && state.mathBotStyle === 'gto')));
       const mainVillain = getMainVillain(updatedPlayers);
       const mainVillainType = mainVillain.type;
       const mainVillainPosition = mainVillain.position;
@@ -742,7 +752,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
             : (heroRaised ? raiseBB : (state.actionCtx.facingRaise ? state.actionCtx.raiseAmount : 1));
           const facingRaiseNow = heroRaised || state.actionCtx.facingRaise || postHeroNewRaiseAmt > 0;
           if (facingAmt > alreadyIn) {
-            const resp = state.trainingMode === 'gto'
+            const resp = (state.trainingMode === 'gto' || (state.trainingMode === 'math' && state.mathBotStyle === 'gto'))
               ? simulateBotGTOAction(bot.cards, bot.position, facingRaiseNow, facingAmt, preflopPot, Math.min(bot.stack, state.heroStack))
               : simulateBotAction(bot.type, bot.position, facingRaiseNow, facingAmt, preflopPot);
             if (resp === 'raise') {
@@ -762,7 +772,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
             }
           } else if (bot.position === 'BB' && !heroRaised && !state.actionCtx.facingRaise && postHeroNewRaiseAmt === 0) {
             // BB option when facing only limps: give BB a chance to squeeze
-            const bbResp = state.trainingMode === 'gto'
+            const bbResp = (state.trainingMode === 'gto' || (state.trainingMode === 'math' && state.mathBotStyle === 'gto'))
               ? simulateBotGTOAction(bot.cards, bot.position, false, 1, preflopPot, Math.min(bot.stack, state.heroStack))
               : simulateBotAction(bot.type, bot.position, false, 1, preflopPot);
             if (bbResp === 'raise') {
@@ -782,7 +792,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
             p => p.position === state.actionCtx.raisedByPosition && p.isActive,
           );
           if (origRaiser) {
-            const resp = state.trainingMode === 'gto'
+            const resp = (state.trainingMode === 'gto' || (state.trainingMode === 'math' && state.mathBotStyle === 'gto'))
               ? simulateBotGTOAction(origRaiser.cards, origRaiser.position, true, raiseBB, preflopPot, Math.min(origRaiser.stack, state.heroStack))
               : simulateBotAction(origRaiser.type, origRaiser.position, true, raiseBB, preflopPot);
             if (resp !== 'fold') {
@@ -800,7 +810,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
             if (!bot.isActive || posIdx >= heroIdx) continue;
             if (bot.position === state.actionCtx.raisedByPosition) continue;
             if (bot.currentBet > 0) {
-              const resp = state.trainingMode === 'gto'
+              const resp = (state.trainingMode === 'gto' || (state.trainingMode === 'math' && state.mathBotStyle === 'gto'))
                 ? simulateBotGTOAction(bot.cards, bot.position, true, raiseBB, preflopPot, Math.min(bot.stack, state.heroStack))
                 : simulateBotAction(bot.type, bot.position, true, raiseBB, preflopPot);
               if (resp !== 'fold') {
@@ -823,7 +833,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
             // totalInvested = original preflop commit + anything added in loops A/B/C
             const totalInvested = bot.currentBet + (extraCommits.get(bot.position) ?? 0);
             if (totalInvested > 0) {
-              const resp = state.trainingMode === 'gto'
+              const resp = (state.trainingMode === 'gto' || (state.trainingMode === 'math' && state.mathBotStyle === 'gto'))
                 ? simulateBotGTOAction(bot.cards, bot.position, true, postHeroNewRaiseAmt, preflopPot, Math.min(bot.stack, state.heroStack))
                 : simulateBotAction(bot.type, bot.position, true, postHeroNewRaiseAmt, preflopPot);
               if (resp !== 'fold') {
@@ -945,7 +955,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       const _flopTexture = analyzeBoardTexture(visibleBoard).texture;
       let villain = heroActsFirst
         ? null
-        : state.trainingMode === 'gto'
+        : (state.trainingMode === 'gto' || (state.trainingMode === 'math' && state.mathBotStyle === 'gto'))
           ? simulateVillainGTOPostFlop(_flopTexture, preflopPot, 'none', flopVillainPlayer.cards, visibleBoard)
           : simulateVillainPostFlop(flopVillainPlayer.type, _flopTexture, preflopPot, 'none', flopVillainPlayer.cards, visibleBoard);
       if (villain && villain.betBB > flopVillainPlayer.stack) villain = { ...villain, betBB: flopVillainPlayer.stack };
@@ -1017,7 +1027,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       // Villain responds — if they bet, pause so hero can fold/call/raise.
       if (state.heroActsFirst && heroAction === 'check' && state.heroCheckedStreet !== street) {
         const _branchATexture = analyzeBoardTexture(board).texture;
-        let villainResp = state.trainingMode === 'gto'
+        let villainResp = (state.trainingMode === 'gto' || (state.trainingMode === 'math' && state.mathBotStyle === 'gto'))
           ? simulateVillainGTOPostFlop(_branchATexture, state.pot, 'check', villainCards, board)
           : simulateVillainPostFlop(state.mainVillainType, _branchATexture, state.pot, 'check', villainCards, board);
         if (villainResp.betBB > villainPlayer.stack) villainResp = { ...villainResp, betBB: villainPlayer.stack };
@@ -1072,7 +1082,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         } else if (heroAction === 'bet' || heroAction === 'raise') {
           // Check-raise — simulate villain's response to the re-raise
           const _branchBTexture = analyzeBoardTexture(board).texture;
-          vFinalB = state.trainingMode === 'gto'
+          vFinalB = (state.trainingMode === 'gto' || (state.trainingMode === 'math' && state.mathBotStyle === 'gto'))
             ? simulateVillainGTOPostFlop(_branchBTexture, state.pot + betBB, 'raise', villainCards, board)
             : simulateVillainPostFlop(state.mainVillainType, _branchBTexture, state.pot + betBB, 'raise', villainCards, board);
           // Cap villain's re-raise at their remaining stack
@@ -1189,13 +1199,13 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       } else if (state.heroActsFirst) {
         // Hero acts first → villain responds to hero's bet/raise
         const _mainTexture = analyzeBoardTexture(board).texture;
-        villainFinalResponse = state.trainingMode === 'gto'
+        villainFinalResponse = (state.trainingMode === 'gto' || (state.trainingMode === 'math' && state.mathBotStyle === 'gto'))
           ? simulateVillainGTOPostFlop(_mainTexture, state.pot, heroAction as 'none'|'check'|'bet'|'raise', villainCards, board)
           : simulateVillainPostFlop(state.mainVillainType, _mainTexture, state.pot, heroAction as 'none'|'check'|'bet'|'raise', villainCards, board);
       } else if (heroAction === 'bet' || heroAction === 'raise') {
         // Villain opened (or checked), hero bet/raised → simulate villain's response
         const _mainTexture2 = analyzeBoardTexture(board).texture;
-        villainFinalResponse = state.trainingMode === 'gto'
+        villainFinalResponse = (state.trainingMode === 'gto' || (state.trainingMode === 'math' && state.mathBotStyle === 'gto'))
           ? simulateVillainGTOPostFlop(_mainTexture2, state.pot + betBB, heroAction as 'bet'|'raise', villainCards, board)
           : simulateVillainPostFlop(state.mainVillainType, _mainTexture2, state.pot + betBB, heroAction as 'bet'|'raise', villainCards, board);
       } else {
@@ -1374,7 +1384,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         const _turnTexture = analyzeBoardTexture(board).texture;
         let villain = turnHeroActsFirst
           ? null
-          : state.trainingMode === 'gto'
+          : (state.trainingMode === 'gto' || (state.trainingMode === 'math' && state.mathBotStyle === 'gto'))
             ? simulateVillainGTOPostFlop(_turnTexture, state.pot, 'none', turnVillainPlayer.cards, board)
             : simulateVillainPostFlop(turnVillainPlayer.type, _turnTexture, state.pot, 'none', turnVillainPlayer.cards, board);
         if (villain && villain.betBB > turnVillainPlayer.stack) villain = { ...villain, betBB: turnVillainPlayer.stack };
@@ -1425,7 +1435,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
         const _riverTexture = analyzeBoardTexture(board).texture;
         let villain = riverHeroActsFirst
           ? null
-          : state.trainingMode === 'gto'
+          : (state.trainingMode === 'gto' || (state.trainingMode === 'math' && state.mathBotStyle === 'gto'))
             ? simulateVillainGTOPostFlop(_riverTexture, state.pot, 'none', riverVillainPlayer.cards, board)
             : simulateVillainPostFlop(riverVillainPlayer.type, _riverTexture, state.pot, 'none', riverVillainPlayer.cards, board);
         if (villain && villain.betBB > riverVillainPlayer.stack) villain = { ...villain, betBB: riverVillainPlayer.stack };
@@ -1564,7 +1574,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       const newRecentSigs = [...state.recentBoardSigs.slice(-(BOARD_SIG_WINDOW - 1)), sig];
 
       if (cfg.startStreet === 'preflop') {
-        const { players: updatedPlayers, actionCtx, pot } = simulateBotPreflop(botPlayers, heroPosition, state.trainingMode === 'gto');
+        const { players: updatedPlayers, actionCtx, pot } = simulateBotPreflop(botPlayers, heroPosition, (state.trainingMode === 'gto' || (state.trainingMode === 'math' && state.mathBotStyle === 'gto')));
         const mainVillain = getMainVillain(updatedPlayers);
         return {
           ...state,
@@ -1607,7 +1617,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       const _customTexture = analyzeBoardTexture(visBoard).texture;
       const villain = heroActsFirst
         ? null
-        : state.trainingMode === 'gto'
+        : (state.trainingMode === 'gto' || (state.trainingMode === 'math' && state.mathBotStyle === 'gto'))
           ? simulateVillainGTOPostFlop(_customTexture, startPot, 'none', customVillainPlayer.cards, visBoard)
           : simulateVillainPostFlop(customVillainPlayer.type, _customTexture, startPot, 'none', customVillainPlayer.cards, visBoard);
       const finalPot = startPot + (villain?.betBB ?? 0);
@@ -1655,7 +1665,8 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 interface GameContextType {
   state: GameState;
   setDifficulty: (d: Difficulty) => void;
-  setTrainingMode: (mode: 'full' | 'preflop' | 'gto' | 'custom') => void;
+  setTrainingMode: (mode: 'full' | 'preflop' | 'gto' | 'custom' | 'math') => void;
+  setMathBotStyle: (style: 'gto' | PlayerType) => void;
   setTableSize: (size: number) => void;
   setGameFormat: (format: 'cash' | 'tournament') => void;
   startNewHand: () => void;
@@ -1673,7 +1684,8 @@ const GameContext = createContext<GameContextType | null>(null);
 export function GameProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(gameReducer, buildInitialState());
   const setDifficulty = useCallback((d: Difficulty) => dispatch({ type: 'SET_DIFFICULTY', difficulty: d }), []);
-  const setTrainingMode = useCallback((mode: 'full' | 'preflop' | 'gto' | 'custom') => dispatch({ type: 'SET_TRAINING_MODE', mode }), []);
+  const setTrainingMode = useCallback((mode: 'full' | 'preflop' | 'gto' | 'custom' | 'math') => dispatch({ type: 'SET_TRAINING_MODE', mode }), []);
+  const setMathBotStyle = useCallback((style: 'gto' | PlayerType) => dispatch({ type: 'SET_MATH_BOT_STYLE', style }), []);
   const setTableSize = useCallback((size: number) => dispatch({ type: 'SET_TABLE_SIZE', tableSize: size }), []);
   const startNewHand = useCallback(() => dispatch({ type: 'START_HAND' }), []);
   const startCustomHand = useCallback((config: CustomHandConfig) => dispatch({ type: 'START_CUSTOM_HAND', config }), []);
@@ -1686,7 +1698,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const setGameFormat = useCallback((format: 'cash' | 'tournament') => dispatch({ type: 'SET_GAME_FORMAT', format }), []);
 
   return (
-    <GameContext.Provider value={{ state, setDifficulty, setTrainingMode, setTableSize, setGameFormat, startNewHand, startCustomHand, goIdle, heroAct, heroPostFlopAct, advancePhase, foldToVillainBet, dismissAnalysis }}>
+    <GameContext.Provider value={{ state, setDifficulty, setTrainingMode, setMathBotStyle, setTableSize, setGameFormat, startNewHand, startCustomHand, goIdle, heroAct, heroPostFlopAct, advancePhase, foldToVillainBet, dismissAnalysis }}>
       {children}
     </GameContext.Provider>
   );
