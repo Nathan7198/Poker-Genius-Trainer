@@ -166,6 +166,8 @@ export interface GameState {
   tournamentStacks: { hero: number; bots: Record<string, number> };
   /** Positions knocked out (0BB reached) in tournament mode */
   eliminatedPositions: Position[];
+  /** Current blind level index (0 = level 1) — increases on a timer in tournament mode */
+  blindLevel: number;
 }
 
 type GameAction =
@@ -175,6 +177,7 @@ type GameAction =
   | { type: 'SET_MATH_PLAYER_TYPE'; position: string; style: PlayerType | 'gto' | null }
   | { type: 'SET_TABLE_SIZE'; tableSize: number }
   | { type: 'SET_GAME_FORMAT'; format: 'cash' | 'tournament' }
+  | { type: 'ADVANCE_BLIND_LEVEL' }
   | { type: 'START_HAND' }
   | { type: 'START_CUSTOM_HAND'; config: CustomHandConfig }
   | { type: 'GO_IDLE' }
@@ -184,6 +187,17 @@ type GameAction =
   | { type: 'FOLD_TO_VILLAIN_BET' }
   | { type: 'DISMISS_ANALYSIS' }
   | { type: 'RESET' };
+
+export const BLIND_STRUCTURE = [
+  { sb: 25,  bb: 50   },
+  { sb: 50,  bb: 100  },
+  { sb: 75,  bb: 150  },
+  { sb: 100, bb: 200  },
+  { sb: 150, bb: 300  },
+  { sb: 200, bb: 400  },
+  { sb: 300, bb: 600  },
+  { sb: 500, bb: 1000 },
+] as const;
 
 const PLAYER_NAMES = ['Alex','Jordan','Morgan','Riley','Casey','Taylor','Drew','Quinn'];
 const PLAYER_TYPE_LIST: PlayerType[] = ['TAG','LAG','Nit','Fish','Maniac','TAG','LAG','Nit'];
@@ -208,6 +222,7 @@ function buildInitialState(): GameState {
     gameFormat: 'cash',
     tournamentStacks: { hero: 100, bots: {} },
     eliminatedPositions: [],
+    blindLevel: 0,
   };
 }
 
@@ -598,10 +613,24 @@ function gameReducer(state: GameState, action: GameAction): GameState {
       return {
         ...state,
         gameFormat: action.format,
-        // Reset tournament state when switching formats
         tournamentStacks: { hero: 100, bots: {} },
         eliminatedPositions: [],
+        blindLevel: 0,
       };
+
+    case 'ADVANCE_BLIND_LEVEL': {
+      const newLevel = Math.min(state.blindLevel + 1, BLIND_STRUCTURE.length - 1);
+      if (newLevel === state.blindLevel) return state;
+      const oldBB = BLIND_STRUCTURE[state.blindLevel].bb;
+      const newBB = BLIND_STRUCTURE[newLevel].bb;
+      const scale = oldBB / newBB;
+      const scaledHero = Math.round(state.tournamentStacks.hero * scale * 10) / 10;
+      const scaledBots: Record<string, number> = {};
+      for (const [k, v] of Object.entries(state.tournamentStacks.bots)) {
+        scaledBots[k] = Math.round(v * scale * 10) / 10;
+      }
+      return { ...state, blindLevel: newLevel, tournamentStacks: { hero: scaledHero, bots: scaledBots } };
+    }
 
     case 'START_HAND': {
       // ── Tournament: award pot from previous hand before dealing ─────────────
@@ -1711,6 +1740,7 @@ interface GameContextType {
   advancePhase: () => void;
   foldToVillainBet: () => void;
   dismissAnalysis: () => void;
+  advanceBlindLevel: () => void;
 }
 
 const GameContext = createContext<GameContextType | null>(null);
@@ -1731,9 +1761,10 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const foldToVillainBet = useCallback(() => dispatch({ type: 'FOLD_TO_VILLAIN_BET' }), []);
   const dismissAnalysis = useCallback(() => dispatch({ type: 'DISMISS_ANALYSIS' }), []);
   const setGameFormat = useCallback((format: 'cash' | 'tournament') => dispatch({ type: 'SET_GAME_FORMAT', format }), []);
+  const advanceBlindLevel = useCallback(() => dispatch({ type: 'ADVANCE_BLIND_LEVEL' }), []);
 
   return (
-    <GameContext.Provider value={{ state, setDifficulty, setTrainingMode, setMathBotStyle, setMathPlayerType, setTableSize, setGameFormat, startNewHand, startCustomHand, goIdle, heroAct, heroPostFlopAct, advancePhase, foldToVillainBet, dismissAnalysis }}>
+    <GameContext.Provider value={{ state, setDifficulty, setTrainingMode, setMathBotStyle, setMathPlayerType, setTableSize, setGameFormat, startNewHand, startCustomHand, goIdle, heroAct, heroPostFlopAct, advancePhase, foldToVillainBet, dismissAnalysis, advanceBlindLevel }}>
       {children}
     </GameContext.Provider>
   );

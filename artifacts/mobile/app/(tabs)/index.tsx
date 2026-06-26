@@ -5,7 +5,7 @@ import {
 import * as Haptics from 'expo-haptics';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useGame } from '@/context/GameContext';
+import { useGame, BLIND_STRUCTURE } from '@/context/GameContext';
 import { useStats } from '@/context/StatsContext';
 import type { HandHistoryEntry } from '@/context/StatsContext';
 import { useColors } from '@/hooks/useColors';
@@ -89,7 +89,7 @@ function TableSetupPanel({ colors, state, setMathPlayerType, liveHand }: {
 }
 
 export default function PlayScreen() {
-  const { state, startNewHand, setDifficulty, setTrainingMode, setMathBotStyle, setMathPlayerType, setTableSize, setGameFormat, goIdle } = useGame();
+  const { state, startNewHand, setDifficulty, setTrainingMode, setMathBotStyle, setMathPlayerType, setTableSize, setGameFormat, goIdle, advanceBlindLevel } = useGame();
   const { logHandHistory, recordHandResult } = useStats();
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -105,6 +105,26 @@ export default function PlayScreen() {
   const [modeBtnY, setModeBtnY] = React.useState(0);
   const [modeBtnX, setModeBtnX] = React.useState(0);
   const [modeBtnH, setModeBtnH] = React.useState(0);
+
+  const BLIND_LEVEL_SECONDS = 5 * 60;
+  const blindTimerStartRef = React.useRef<number>(Date.now());
+  const [blindSecondsLeft, setBlindSecondsLeft] = React.useState(BLIND_LEVEL_SECONDS);
+
+  React.useEffect(() => {
+    blindTimerStartRef.current = Date.now();
+    setBlindSecondsLeft(BLIND_LEVEL_SECONDS);
+  }, [state.gameFormat, state.blindLevel]);
+
+  React.useEffect(() => {
+    if (state.gameFormat !== 'tournament') return;
+    const id = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - blindTimerStartRef.current) / 1000);
+      const remaining = Math.max(0, BLIND_LEVEL_SECONDS - elapsed);
+      setBlindSecondsLeft(remaining);
+      if (remaining === 0) advanceBlindLevel();
+    }, 1000);
+    return () => clearInterval(id);
+  }, [state.gameFormat, state.blindLevel]);
 
   const bounceAnim = React.useRef(new Animated.Value(0)).current;
   React.useEffect(() => {
@@ -618,19 +638,46 @@ export default function PlayScreen() {
             </View>
           ) : (
             <View style={styles.centerActions}>
-              {state.gameFormat === 'tournament' && (
-                <View style={[styles.tourneyChips, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                  <Text style={[styles.tourneyChipsLabel, { color: colors.mutedForeground }]}>YOUR TOURNAMENT STACK</Text>
-                  <Text style={[styles.tourneyChipsValue, { color: colors.goldLight }]}>
-                    {Number.isInteger(state.tournamentStacks.hero) ? state.tournamentStacks.hero : state.tournamentStacks.hero.toFixed(1)} BB
-                  </Text>
-                  {state.eliminatedPositions.length > 0 && (
-                    <Text style={[styles.tourneyElimText, { color: colors.mutedForeground }]}>
-                      Eliminated: {state.eliminatedPositions.join(', ')}
-                    </Text>
-                  )}
-                </View>
-              )}
+              {state.gameFormat === 'tournament' && (() => {
+                const lvl = BLIND_STRUCTURE[Math.min(state.blindLevel, BLIND_STRUCTURE.length - 1)];
+                const mins = Math.floor(blindSecondsLeft / 60);
+                const secs = String(blindSecondsLeft % 60).padStart(2, '0');
+                const isLastLevel = state.blindLevel >= BLIND_STRUCTURE.length - 1;
+                return (
+                  <View style={{ gap: 8, alignSelf: 'stretch', alignItems: 'center' }}>
+                    <View style={[styles.blindLevelBanner, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                      <View style={styles.blindLevelLeft}>
+                        <Text style={[styles.blindLevelNum, { color: colors.gold }]}>LEVEL {state.blindLevel + 1}</Text>
+                        <Text style={[styles.blindLevelBlinds, { color: colors.foreground }]}>{lvl.sb}/{lvl.bb}</Text>
+                      </View>
+                      <View style={styles.blindLevelRight}>
+                        <Text style={[styles.blindLevelTimerLabel, { color: colors.mutedForeground }]}>
+                          {isLastLevel ? 'FINAL LEVEL' : 'NEXT LEVEL'}
+                        </Text>
+                        {!isLastLevel && (
+                          <Text style={[styles.blindLevelTimer, { color: blindSecondsLeft <= 30 ? '#E74C3C' : colors.foreground }]}>
+                            {mins}:{secs}
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+                    <View style={[styles.tourneyChips, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                      <Text style={[styles.tourneyChipsLabel, { color: colors.mutedForeground }]}>YOUR TOURNAMENT STACK</Text>
+                      <Text style={[styles.tourneyChipsValue, { color: colors.goldLight }]}>
+                        {Number.isInteger(state.tournamentStacks.hero) ? state.tournamentStacks.hero : state.tournamentStacks.hero.toFixed(1)} BB
+                      </Text>
+                      <Text style={[styles.tourneyElimText, { color: colors.mutedForeground }]}>
+                        ≈ {Math.round(state.tournamentStacks.hero * lvl.bb).toLocaleString()} chips
+                      </Text>
+                      {state.eliminatedPositions.length > 0 && (
+                        <Text style={[styles.tourneyElimText, { color: colors.mutedForeground }]}>
+                          Eliminated: {state.eliminatedPositions.join(', ')}
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+                );
+              })()}
               <TouchableOpacity style={[styles.dealBtn, { backgroundColor: colors.gold }]} onPress={handleNewHand}>
                 <Text style={[styles.dealBtnText, { color: '#0A0A0A' }]}>DEAL CARDS</Text>
               </TouchableOpacity>
@@ -668,7 +715,11 @@ export default function PlayScreen() {
                       <Text style={{ color: colors.foreground, fontWeight: '700' }}>Table size</Text>
                       {' '}— choose 2-player heads-up all the way up to a full 9-handed ring game. Pick any custom size in between.{'\n\n'}
                       <Text style={{ color: colors.foreground, fontWeight: '700' }}>Format</Text>
-                      {' '}— switch between cash game (where chips equal money) and tournament play (with escalating blinds and elimination pressure).{'\n\n'}
+                      {' '}— switch between cash game and tournament. In a{' '}
+                      <Text style={{ color: colors.foreground, fontWeight: '700' }}>cash game</Text>
+                      {' '}your stack resets to 100BB at the start of every hand, so each decision is independent. In a{' '}
+                      <Text style={{ color: colors.foreground, fontWeight: '700' }}>tournament</Text>
+                      {' '}your chips carry over between hands, blinds escalate every 5 minutes, and if your stack hits 0 you are eliminated.{'\n\n'}
                       <Text style={{ color: colors.foreground, fontWeight: '700' }}>Seats</Text>
                       {' '}— assign a player type to each seat at the table: TAG (tight-aggressive), LAG (loose-aggressive), Nit, Fish, Maniac, or GTO. Mix and match to simulate any table dynamic you face in real games.{'\n\n'}
                       <Text style={{ color: colors.foreground, fontWeight: '700' }}>Difficulty</Text>
@@ -927,6 +978,17 @@ const styles = StyleSheet.create({
   seatsPickerChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, flex: 1 },
   seatsPickerChip: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 5, borderWidth: 1 },
   seatsPickerChipText: { fontSize: 9, fontWeight: '800', letterSpacing: 0.3 },
+  blindLevelBanner: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    borderRadius: 12, borderWidth: 1, paddingVertical: 10, paddingHorizontal: 16,
+    alignSelf: 'stretch',
+  },
+  blindLevelLeft: { gap: 2 },
+  blindLevelNum: { fontSize: 9, fontWeight: '800', letterSpacing: 1.5 },
+  blindLevelBlinds: { fontSize: 20, fontWeight: '900', letterSpacing: 0.5 },
+  blindLevelRight: { alignItems: 'flex-end', gap: 2 },
+  blindLevelTimerLabel: { fontSize: 9, fontWeight: '700', letterSpacing: 1.5 },
+  blindLevelTimer: { fontSize: 22, fontWeight: '900', fontVariant: ['tabular-nums'] as any },
   tourneyChips: {
     borderRadius: 12, borderWidth: 1, paddingVertical: 12, paddingHorizontal: 20,
     alignItems: 'center', minWidth: 200,
