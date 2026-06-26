@@ -643,16 +643,36 @@ export default function PlayScreen() {
                 <View style={styles.featureRow}>
                   <Feather name="layers" size={15} color={colors.gold} />
                   <View style={styles.featureText}>
-                    <Text style={[styles.featureTitle, { color: colors.foreground }]}>Four Game Modes</Text>
+                    <Text style={[styles.featureTitle, { color: colors.foreground }]}>Five Game Modes</Text>
                     <Text style={[styles.featureDesc, { color: colors.mutedForeground }]}>
                       <Text style={{ color: colors.foreground, fontWeight: '700' }}>Full Hands</Text>
                       {' '}takes you street-by-street through a complete hand — see real-time pot odds, equity estimates, board texture reads, and post-flop coaching at every decision point.{'\n\n'}
                       <Text style={{ color: colors.foreground, fontWeight: '700' }}>Pre Flop</Text>
                       {' '}is a pure preflop drill. Every hand, every position — practice opens, calls, 3-bets, and folds until your preflop instincts are automatic.{'\n\n'}
+                      <Text style={{ color: colors.foreground, fontWeight: '700' }}>Poker Maths</Text>
+                      {' '}trains the numbers behind every decision. After you act, a live maths panel breaks down pot odds, your equity, implied odds, and expected value — so you learn to calculate on the fly and understand exactly why a call or fold is profitable.{'\n\n'}
                       <Text style={{ color: colors.foreground, fontWeight: '700' }}>GTO Mode</Text>
                       {' '}removes all coaching and faces you against mathematically optimal bots. Make your decision blind, then see exactly how it compares to game theory optimal play — with a full breakdown of what you should have done and why.{'\n\n'}
                       <Text style={{ color: colors.foreground, fontWeight: '700' }}>Custom</Text>
                       {' '}puts you in the director's chair. Set your hole cards, choose your position, pick the board texture, and engineer the exact scenario you want to master.
+                    </Text>
+                  </View>
+                </View>
+                <View style={[styles.featureDivider, { backgroundColor: colors.border }]} />
+                <View style={styles.featureRow}>
+                  <Feather name="sliders" size={15} color="#9B59B6" />
+                  <View style={styles.featureText}>
+                    <Text style={[styles.featureTitle, { color: colors.foreground }]}>Fully Customisable Table</Text>
+                    <Text style={[styles.featureDesc, { color: colors.mutedForeground }]}>
+                      The settings bar at the top lets you tailor every session to exactly what you want to practise.{'\n\n'}
+                      <Text style={{ color: colors.foreground, fontWeight: '700' }}>Table size</Text>
+                      {' '}— choose 2-player heads-up all the way up to a full 9-handed ring game. Pick any custom size in between.{'\n\n'}
+                      <Text style={{ color: colors.foreground, fontWeight: '700' }}>Format</Text>
+                      {' '}— switch between cash game (where chips equal money) and tournament play (with escalating blinds and elimination pressure).{'\n\n'}
+                      <Text style={{ color: colors.foreground, fontWeight: '700' }}>Seats</Text>
+                      {' '}— assign a player type to each seat at the table: TAG (tight-aggressive), LAG (loose-aggressive), Nit, Fish, Maniac, or GTO. Mix and match to simulate any table dynamic you face in real games.{'\n\n'}
+                      <Text style={{ color: colors.foreground, fontWeight: '700' }}>Difficulty</Text>
+                      {' '}— scale the challenge from Beginner through to Expert to match your current skill level.
                     </Text>
                   </View>
                 </View>
