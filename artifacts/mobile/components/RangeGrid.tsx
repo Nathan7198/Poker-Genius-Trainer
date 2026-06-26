@@ -2,9 +2,8 @@ import React, { useMemo } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import {
   Position, GRID_RANKS, getGridCell,
-  GTO_RANGES, BB_DEFENSE, THREEBET_VALUE, THREEBET_BLUFF,
-  STACK_GTO_RANGES, STACK_BB_DEFENSE, SHORT_THREEBET_VALUE,
-  TABLE_FORMAT_RANGES,
+  THREEBET_VALUE, THREEBET_BLUFF, SHORT_THREEBET_VALUE,
+  ALL_FORMAT_STACK_RANGES,
   StackTier, TableFormat,
 } from '@/constants/pokerData';
 import { useColors } from '@/hooks/useColors';
@@ -23,19 +22,16 @@ export default function RangeGrid({ position, highlightHand, showLegend = true, 
   const { width } = useWindowDimensions();
   const cellSize = compact ? Math.floor((width - 40) / 13) - 1 : Math.floor((width - 32) / 13) - 1;
 
-  const nonSixmax = tableFormat && tableFormat !== 'sixmax';
-  const range = nonSixmax
-    ? TABLE_FORMAT_RANGES[tableFormat][position]
-    : stackTier
-      ? (position === 'BB' ? STACK_BB_DEFENSE[stackTier] : STACK_GTO_RANGES[stackTier][position])
-      : (position === 'BB' ? BB_DEFENSE : GTO_RANGES[position]);
+  const effectiveFormat: TableFormat = tableFormat ?? 'sixmax';
+  const effectiveTier: StackTier = stackTier ?? 'deep';
+  const range = ALL_FORMAT_STACK_RANGES[effectiveFormat][effectiveTier][position];
 
-  const threebetValue = nonSixmax
-    ? (tableFormat === 'hu' ? new Set<string>() : THREEBET_VALUE)
-    : (stackTier === 'push-fold' ? new Set<string>() : stackTier === 'short' ? SHORT_THREEBET_VALUE : THREEBET_VALUE);
-  const threebetBluff = nonSixmax
-    ? new Set<string>()
-    : ((stackTier === 'short' || stackTier === 'push-fold') ? new Set<string>() : THREEBET_BLUFF);
+  const isHU = effectiveFormat === 'hu';
+  const threebetValue = (effectiveTier === 'push-fold' || isHU) ? new Set<string>()
+    : effectiveTier === 'short' ? SHORT_THREEBET_VALUE
+    : THREEBET_VALUE;
+  const threebetBluff = (effectiveTier === 'short' || effectiveTier === 'push-fold' || isHU)
+    ? new Set<string>() : THREEBET_BLUFF;
 
   const cells = useMemo(() => {
     return GRID_RANKS.map((_, row) =>
@@ -125,7 +121,7 @@ export default function RangeGrid({ position, highlightHand, showLegend = true, 
 
       <View style={[styles.statsRow, { borderTopColor: colors.border }]}>
         <Text style={[styles.statsText, { color: colors.mutedForeground }]}>
-          {position === 'BB' ? 'Defense Range' : !nonSixmax && stackTier === 'push-fold' ? 'Shove Range' : 'Opening Range'}:{' '}
+          {position === 'BB' ? 'Defense Range' : effectiveTier === 'push-fold' ? 'Shove Range' : 'Opening Range'}:{' '}
           <Text style={{ color: colors.primary, fontWeight: '700' }}>{openPct}%</Text> of hands
           {' · '}{openCount} combos
         </Text>

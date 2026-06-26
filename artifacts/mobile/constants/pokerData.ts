@@ -947,11 +947,11 @@ const SHORT_CORE = new Set([
   'AKs','AQs','AJs','ATs','A9s','A8s','A7s','A6s','A5s','A4s','A3s','A2s',
   'KQs','KJs','KTs',
   'QJs','JTs','T9s',
-  'AKo','AQo','AJo','ATo',
+  'AKo','AQo','AJo','ATo','KQo',
 ]);
 
 // MID (40-75BB): slightly wider than SHORT_CORE per position
-const HJ_MID_EXTRA = ['66','55','K9s','K8s','K7s','Q8s','J7s','T7s','97s','86s','A9o','A8o','KTo','QJo'];
+const HJ_MID_EXTRA = ['66','55','K9s','K8s','K7s','Q9s','Q8s','J7s','T7s','97s','86s','A9o','A8o','KJo','KTo','QJo'];
 const HJ_MID  = new Set([...SHORT_CORE, ...HJ_MID_EXTRA]);
 const CO_MID  = new Set([...HJ_MID, '44','33','22','Q9s','Q8s','J8s','J9s','T8s','98s','87s','76s','65s','A7o','A6o','KJo','QTo','JTo']);
 const BTN_MID = new Set([...CO_MID, 'K6s','K5s','Q7s','Q6s','J6s','T6s','96s','85s','75s','64s','53s','43s','A5o','A4o','A3o','K9o','K8o','Q9o']);
@@ -974,6 +974,12 @@ const PF_CO = new Set([...PF_HJ, '98s','87s','76s','K8s','QTs','J9s','T8s','KJo'
 const PF_BTN = new Set([...PF_CO, '65s','54s','97s','86s','75s','64s','Q9s','J8s','97o','QJo','QTo','A7o','A6o','A5o','A4o','K9o']);
 const PF_SB  = new Set([...PF_BTN, '43s','53s','Q8s','T7s','96s','85s','74s','KTo','A3o','A2o','K8o','J9o']);
 
+// 6-max short-stack MP: between SHORT_CORE and CO_SHORT, slightly tighter than HJ
+const SIX_MAX_MP_SHORT = new Set([
+  ...SHORT_CORE,
+  '66','55','K9s','K8s','Q9s','J9s','98s','87s','A9o','A8o','KJo',
+]);
+
 export const STACK_GTO_RANGES: Record<StackTier, Record<Position, Set<string>>> = {
   'deep': GTO_RANGES,
   'mid': {
@@ -983,7 +989,7 @@ export const STACK_GTO_RANGES: Record<StackTier, Record<Position, Set<string>>> 
   },
   'short': {
     UTG: SHORT_CORE, UTG2: SHORT_CORE, UTG3: SHORT_CORE,
-    MP:  UTG_SET,    HJ: UTG_SET,
+    MP:  SIX_MAX_MP_SHORT, HJ: CO_SHORT,
     CO:  CO_SHORT,   BTN: BTN_SHORT, SB: SB_SHORT, BB: new Set(),
   },
   'push-fold': {
@@ -1155,8 +1161,8 @@ const FR_UTG3_SET = new Set([
 ]);
 const FR_MP_SET = new Set([
   ...FR_UTG3_SET,
-  '55','44','K6s','K5s','Q7s','J7s','T8s','76s','65s',
-  'A9o','KTo','QJo',
+  '55','J7s','T7s','97s','86s',
+  'A9o','A8o','KTo','QJo',
 ]);
 
 export const TABLE_FORMAT_RANGES: Record<TableFormat, Record<Position, Set<string>>> = {
@@ -1181,6 +1187,185 @@ export const FORMAT_POSITIONS: Record<TableFormat, Position[]> = {
   sh:     ['HJ', 'CO', 'BTN', 'SB', 'BB'],
   sixmax: ['UTG', 'HJ', 'CO', 'BTN', 'SB', 'BB'],
   fr:     ['UTG', 'UTG2', 'UTG3', 'MP', 'HJ', 'CO', 'BTN', 'SB', 'BB'],
+};
+
+// ── Stack-tier ranges for all table formats ─────────────────────────────────
+// HU mid (40-75BB) — trim weakest suited / offsuit trash, ~55%
+const HU_BTN_MID = new Set([
+  'AA','KK','QQ','JJ','TT','99','88','77','66','55','44','33','22',
+  'AKs','AQs','AJs','ATs','A9s','A8s','A7s','A6s','A5s','A4s','A3s','A2s',
+  'KQs','KJs','KTs','K9s','K8s','K7s','K6s','K5s','K4s','K3s','K2s',
+  'QJs','QTs','Q9s','Q8s','Q7s','Q6s','Q5s','Q4s','Q3s','Q2s',
+  'JTs','J9s','J8s','J7s','J6s','J5s','J4s','J3s',
+  'T9s','T8s','T7s','T6s','T5s','T4s',
+  '98s','97s','96s','95s','94s',
+  '87s','86s','85s','84s',
+  '76s','75s','74s',
+  '65s','64s','63s',
+  '54s','53s',
+  '43s',
+  'AKo','AQo','AJo','ATo','A9o','A8o','A7o','A6o','A5o','A4o','A3o','A2o',
+  'KQo','KJo','KTo','K9o','K8o','K7o',
+  'QJo','QTo','Q9o',
+  'JTo','J9o',
+  'T9o',
+]);
+const HU_BB_MID = new Set([
+  'AA','KK','QQ','JJ','TT','99','88','77','66','55','44','33','22',
+  'AKs','AQs','AJs','ATs','A9s','A8s','A7s','A6s','A5s','A4s','A3s','A2s',
+  'KQs','KJs','KTs','K9s','K8s','K7s','K6s','K5s','K4s','K3s','K2s',
+  'QJs','QTs','Q9s','Q8s','Q7s','Q6s','Q5s','Q4s','Q3s',
+  'JTs','J9s','J8s','J7s','J6s','J5s','J4s',
+  'T9s','T8s','T7s','T6s','T5s',
+  '98s','97s','96s','95s',
+  '87s','86s','85s',
+  '76s','75s','74s',
+  '65s','64s',
+  '54s','53s',
+  '43s',
+  'AKo','AQo','AJo','ATo','A9o','A8o','A7o','A6o','A5o','A4o','A3o','A2o',
+  'KQo','KJo','KTo','K9o','K8o',
+  'QJo','QTo','Q9o',
+  'JTo','J9o',
+  'T9o',
+]);
+
+// HU short (20-40BB) — pairs, suited aces/kings, top suited queens, Ax/Kx offsuit, ~40%
+const HU_BTN_SHORT = new Set([
+  'AA','KK','QQ','JJ','TT','99','88','77','66','55','44','33','22',
+  'AKs','AQs','AJs','ATs','A9s','A8s','A7s','A6s','A5s','A4s','A3s','A2s',
+  'KQs','KJs','KTs','K9s','K8s','K7s','K6s','K5s',
+  'QJs','QTs','Q9s','Q8s','Q7s','Q6s',
+  'JTs','J9s','J8s','J7s',
+  'T9s','T8s','T7s',
+  '98s','97s','96s',
+  '87s','86s',
+  '76s','75s',
+  '65s','64s',
+  '54s',
+  'AKo','AQo','AJo','ATo','A9o','A8o','A7o','A6o','A5o','A4o','A3o','A2o',
+  'KQo','KJo','KTo','K9o',
+  'QJo','QTo',
+  'JTo',
+]);
+const HU_BB_SHORT = new Set([
+  'AA','KK','QQ','JJ','TT','99','88','77','66','55','44','33','22',
+  'AKs','AQs','AJs','ATs','A9s','A8s','A7s','A6s','A5s','A4s','A3s','A2s',
+  'KQs','KJs','KTs','K9s','K8s','K7s',
+  'QJs','QTs','Q9s','Q8s',
+  'JTs','J9s','J8s',
+  'T9s','T8s',
+  '98s','97s',
+  '87s','86s',
+  '76s',
+  '65s',
+  '54s',
+  'AKo','AQo','AJo','ATo','A9o','A8o','A7o','A6o','A5o','A4o','A3o','A2o',
+  'KQo','KJo','KTo',
+  'QJo','QTo',
+  'JTo',
+]);
+
+// HU push-fold (<20BB) — shove range ~33%
+const HU_BTN_PF = new Set([
+  'AA','KK','QQ','JJ','TT','99','88','77','66','55','44','33','22',
+  'AKs','AQs','AJs','ATs','A9s','A8s','A7s','A6s','A5s','A4s','A3s','A2s',
+  'KQs','KJs','KTs','K9s','K8s',
+  'QJs','QTs','Q9s',
+  'JTs','J9s',
+  'T9s','T8s',
+  '98s','97s',
+  '87s',
+  '76s',
+  '65s',
+  '54s',
+  'AKo','AQo','AJo','ATo','A9o','A8o','A7o','A6o','A5o','A4o','A3o','A2o',
+  'KQo','KJo','KTo',
+  'QJo',
+  'JTo',
+]);
+// HU BB calling range vs shove ~22%
+const HU_BB_PF = new Set([
+  'AA','KK','QQ','JJ','TT','99','88','77','66','55','44','33',
+  'AKs','AQs','AJs','ATs','A9s','A8s','A7s','A6s','A5s',
+  'KQs','KJs','KTs','K9s',
+  'QJs','QTs',
+  'JTs',
+  'T9s','T8s',
+  '98s',
+  'AKo','AQo','AJo','ATo','A9o','A8o','A7o',
+  'KQo','KJo',
+  'QJo',
+]);
+
+// Short-handed stack tiers — each position maps to ~one spot later in 6-max
+const SH_HJ_MID    = CO_MID;
+const SH_CO_MID    = BTN_MID;
+const SH_BTN_MID   = new Set([...BTN_MID, 'Q4s','Q3s','J4s','J3s','T4s','T3s','94s','84s','74s','63s','K7o','Q8o','J8o']);
+const SH_SB_MID    = new Set([...SH_BTN_MID, '53s','43s','K6o','K5o','Q7o','J7o','T7o','97o','87o']);
+const SH_BB_MID    = new Set([...MID_BB_DEFENSE, 'K4o','K3o','K2o','Q5o','Q4o','Q3o','J6o','J5o','T6o','96o','86o','76o','65o','54o']);
+
+const SH_HJ_SHORT  = CO_SHORT;
+const SH_CO_SHORT  = BTN_SHORT;
+const SH_BTN_SHORT = new Set([...BTN_SHORT, '44','33','22','K7s','Q8s','J8s','T7s','97s','86s','76s','K9o','Q9o']);
+const SH_SB_SHORT  = new Set([...SH_BTN_SHORT, 'A9o','K8o','J9o','T8o','98o']);
+const SH_BB_SHORT  = new Set([...SHORT_BB_DEFENSE, 'K9o','Q9o','J8o','T7o','96o','85o','75o','65o','54o']);
+
+// Full ring mid (40-75BB) — tighter EP than FR deep
+const FR_UTG_MID = new Set([
+  'AA','KK','QQ','JJ','TT','99',
+  'AKs','AQs','AJs','ATs','A9s','A8s',
+  'KQs','KJs','KTs',
+  'QJs','JTs',
+  'AKo','AQo',
+  'KQo',
+]);
+const FR_UTG2_MID = new Set([...FR_UTG_MID, '88','77','A7s','A6s','A5s','K9s','T9s','AJo']);
+const FR_UTG3_MID = new Set([...FR_UTG2_MID, '66','A4s','K8s','Q8s','ATo','KJo']);
+const FR_MP_MID   = new Set([...FR_UTG3_MID, '55','K7s','J7s','T7s','97s','86s','A9o','A8o','KTo','QJo']);
+
+// Full ring short (20-40BB) — very tight EP
+const FR_UTG_SHORT = new Set([
+  'AA','KK','QQ','JJ','TT','99','88',
+  'AKs','AQs','AJs','ATs','A9s',
+  'KQs','KJs',
+  'QJs',
+  'JTs',
+  'AKo','AQo','AJo',
+  'KQo',
+]);
+const FR_UTG2_SHORT = new Set([...FR_UTG_SHORT, '77','A8s','A7s','A6s','KTs','T9s','ATo','KJo']);
+const FR_UTG3_SHORT = new Set([...FR_UTG2_SHORT, '66','55','A5s','A4s','K9s','Q9s','J9s','98s','A9o','QJo']);
+const FR_MP_SHORT   = new Set([...FR_UTG3_SHORT, 'A3s','K8s','87s','76s','A8o']);
+
+// ── Combined all-format × all-tier range lookup ─────────────────────────────
+const EMPTY = new Set<string>();
+
+export const ALL_FORMAT_STACK_RANGES: Record<TableFormat, Record<StackTier, Record<Position, Set<string>>>> = {
+  hu: {
+    deep:       { UTG: EMPTY, UTG2: EMPTY, UTG3: EMPTY, MP: EMPTY, HJ: EMPTY, CO: EMPTY, BTN: HU_BTN_RANGE, SB: HU_BTN_RANGE, BB: HU_BB_DEFENSE },
+    mid:        { UTG: EMPTY, UTG2: EMPTY, UTG3: EMPTY, MP: EMPTY, HJ: EMPTY, CO: EMPTY, BTN: HU_BTN_MID,   SB: HU_BTN_MID,   BB: HU_BB_MID },
+    short:      { UTG: EMPTY, UTG2: EMPTY, UTG3: EMPTY, MP: EMPTY, HJ: EMPTY, CO: EMPTY, BTN: HU_BTN_SHORT, SB: HU_BTN_SHORT, BB: HU_BB_SHORT },
+    'push-fold':{ UTG: EMPTY, UTG2: EMPTY, UTG3: EMPTY, MP: EMPTY, HJ: EMPTY, CO: EMPTY, BTN: HU_BTN_PF,    SB: HU_BTN_PF,    BB: HU_BB_PF },
+  },
+  sh: {
+    deep:       { UTG: EMPTY, UTG2: EMPTY, UTG3: EMPTY, MP: EMPTY, HJ: SH_HJ_SET,   CO: SH_CO_SET,   BTN: SH_BTN_SET,   SB: SH_SB_SET,   BB: SH_BB_DEFENSE },
+    mid:        { UTG: EMPTY, UTG2: EMPTY, UTG3: EMPTY, MP: EMPTY, HJ: SH_HJ_MID,   CO: SH_CO_MID,   BTN: SH_BTN_MID,   SB: SH_SB_MID,   BB: SH_BB_MID },
+    short:      { UTG: EMPTY, UTG2: EMPTY, UTG3: EMPTY, MP: EMPTY, HJ: SH_HJ_SHORT, CO: SH_CO_SHORT, BTN: SH_BTN_SHORT, SB: SH_SB_SHORT, BB: SH_BB_SHORT },
+    'push-fold':{ UTG: EMPTY, UTG2: EMPTY, UTG3: EMPTY, MP: EMPTY, HJ: PF_HJ,       CO: PF_CO,       BTN: PF_BTN,       SB: PF_SB,       BB: PUSHFOLD_BB_DEFENSE },
+  },
+  sixmax: {
+    deep:       { ...GTO_RANGES,                    BB: BB_DEFENSE },
+    mid:        { ...STACK_GTO_RANGES.mid,           BB: MID_BB_DEFENSE },
+    short:      { ...STACK_GTO_RANGES.short,         BB: SHORT_BB_DEFENSE },
+    'push-fold':{ ...STACK_GTO_RANGES['push-fold'],  BB: PUSHFOLD_BB_DEFENSE },
+  },
+  fr: {
+    deep:       { UTG: FR_UTG_SET,   UTG2: FR_UTG2_SET,   UTG3: FR_UTG3_SET,   MP: FR_MP_SET,   HJ: HJ_SET,   CO: CO_SET,   BTN: BTN_SET,   SB: SB_SET,   BB: BB_DEFENSE },
+    mid:        { UTG: FR_UTG_MID,   UTG2: FR_UTG2_MID,   UTG3: FR_UTG3_MID,   MP: FR_MP_MID,   HJ: HJ_MID,   CO: CO_MID,   BTN: BTN_MID,   SB: SB_MID,   BB: MID_BB_DEFENSE },
+    short:      { UTG: FR_UTG_SHORT, UTG2: FR_UTG2_SHORT, UTG3: FR_UTG3_SHORT, MP: FR_MP_SHORT, HJ: CO_SHORT, CO: BTN_SHORT, BTN: BTN_SHORT, SB: SB_SHORT, BB: SHORT_BB_DEFENSE },
+    'push-fold':{ UTG: PF_UTG,       UTG2: PF_UTG,        UTG3: PF_UTG,        MP: PF_HJ,       HJ: PF_HJ,    CO: PF_CO,    BTN: PF_BTN,    SB: PF_SB,    BB: PUSHFOLD_BB_DEFENSE },
+  },
 };
 
 // GTO-correct preflop action: uses the bot's actual cards vs position ranges.

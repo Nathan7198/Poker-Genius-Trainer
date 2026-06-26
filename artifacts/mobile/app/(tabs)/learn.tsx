@@ -102,7 +102,6 @@ export default function LearnScreen() {
         {/* ── RANGES ── */}
         {activeTab === 'ranges' && (() => {
           const validPositions = FORMAT_POSITIONS[selectedTableFormat];
-          const isSixmax = selectedTableFormat === 'sixmax';
           const tierColors: Record<StackTier, string> = { deep: '#27AE60', mid: '#3498DB', short: '#E67E22', 'push-fold': '#E74C3C' };
           const tierShort: Record<StackTier, string> = { deep: '75BB+', mid: '40–75BB', short: '20–40BB', 'push-fold': '<20BB' };
           const fmtColors: Record<TableFormat, string> = { hu: '#E74C3C', sh: '#E67E22', sixmax: '#27AE60', fr: '#3498DB' };
@@ -146,42 +145,27 @@ export default function LearnScreen() {
               ))}
             </ScrollView>
 
-            {/* Stack tier selector — only for 6-max (stack-adjusted ranges only defined for 6-max) */}
-            {isSixmax ? (
-              <>
-                <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>STACK SIZE</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.posRow} contentContainerStyle={{ gap: 8, paddingHorizontal: 16, paddingBottom: 8 }}>
-                  {(['deep', 'mid', 'short', 'push-fold'] as StackTier[]).map(tier => {
-                    const col = tierColors[tier];
-                    const sel = selectedStackTier === tier;
-                    return (
-                      <TouchableOpacity
-                        key={tier}
-                        style={[styles.posChip, { backgroundColor: sel ? col : colors.secondary, borderColor: col, borderWidth: 1 }]}
-                        onPress={() => setSelectedStackTier(tier)}
-                      >
-                        <Text style={[styles.posChipText, { color: sel ? '#FFF' : col }]}>{tierShort[tier]}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
-                <View style={[styles.stackTierBadge, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                  <Text style={[styles.stackTierLabel, { color: tierColors[selectedStackTier] }]}>{STACK_TIER_LABELS[selectedStackTier]}</Text>
-                  <Text style={[styles.stackTierDesc, { color: colors.mutedForeground }]}>{STACK_TIER_DESCRIPTIONS[selectedStackTier]}</Text>
-                </View>
-              </>
-            ) : (
-              <View style={[styles.stackTierBadge, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <Text style={[styles.stackTierLabel, { color: fmtColors[selectedTableFormat] }]}>{TABLE_FORMAT_LABELS[selectedTableFormat]}</Text>
-                <Text style={[styles.stackTierDesc, { color: colors.mutedForeground }]}>
-                  {selectedTableFormat === 'hu'
-                    ? 'Heads-up strategy differs significantly from multi-way play. Ranges are very wide — position and aggression dominate. Stack-size tiers apply to 6-max view.'
-                    : selectedTableFormat === 'sh'
-                      ? 'Short-handed tables reward aggression. Every position plays wider as there are fewer players to run into strong hands. Stack-size tiers apply to 6-max view.'
-                      : 'Full ring EP ranges are significantly tighter — you have up to 8 players still to act. Ranges widen considerably in later positions. Stack-size tiers apply to 6-max view.'}
-                </Text>
-              </View>
-            )}
+            {/* Stack tier selector */}
+            <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>STACK SIZE</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.posRow} contentContainerStyle={{ gap: 8, paddingHorizontal: 16, paddingBottom: 8 }}>
+              {(['deep', 'mid', 'short', 'push-fold'] as StackTier[]).map(tier => {
+                const col = tierColors[tier];
+                const sel = selectedStackTier === tier;
+                return (
+                  <TouchableOpacity
+                    key={tier}
+                    style={[styles.posChip, { backgroundColor: sel ? col : colors.secondary, borderColor: col, borderWidth: 1 }]}
+                    onPress={() => setSelectedStackTier(tier)}
+                  >
+                    <Text style={[styles.posChipText, { color: sel ? '#FFF' : col }]}>{tierShort[tier]}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+            <View style={[styles.stackTierBadge, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Text style={[styles.stackTierLabel, { color: tierColors[selectedStackTier] }]}>{STACK_TIER_LABELS[selectedStackTier]}</Text>
+              <Text style={[styles.stackTierDesc, { color: colors.mutedForeground }]}>{STACK_TIER_DESCRIPTIONS[selectedStackTier]}</Text>
+            </View>
 
             {/* Position label */}
             <View style={styles.posHeader}>
@@ -209,7 +193,7 @@ export default function LearnScreen() {
               <RangeGrid
                 position={selectedPosition}
                 compact={false}
-                stackTier={isSixmax ? selectedStackTier : undefined}
+                stackTier={selectedStackTier}
                 tableFormat={selectedTableFormat}
               />
             </View>
