@@ -27,7 +27,7 @@
       [
         "expo-router",
         {
-          "origin": "https://replit.com/"
+          "origin": "https://poker-genius-trainer.vercel.app/"
         }
       ],
       "expo-font",
