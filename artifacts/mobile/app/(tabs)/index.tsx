@@ -596,72 +596,76 @@ export default function PlayScreen() {
 
       {/* Showdown footer — always fully visible, no scrolling needed */}
       {isShowdown && (
-        <View style={[styles.sdFooter, { borderTopColor: colors.border }]}>
-          {/* Winner badge + hand names */}
-          <View style={styles.sdResultSection}>
-            {isPreflopMode && !state.showdownResult ? (
-              <View style={[styles.sdWinBadge, { backgroundColor: '#A8882A18', borderColor: '#A8882A50' }]}>
-                <Text style={[styles.sdWinLabel, { color: colors.goldLight }]}>PREFLOP DRILL COMPLETE</Text>
-                <Text style={[styles.sdWinSub, { color: colors.mutedForeground }]}>
-                  {state.analysis?.isGTO ? '✓ GTO decision' : '✗ Mistake — see coach for details'}
-                </Text>
+        <View style={[styles.sdFooter, { borderTopColor: isCorrectFold ? '#27AE60' : colors.border, borderTopWidth: isCorrectFold ? 2 : 1 }]}>
+
+          {/* ── CORRECT FOLD HERO ─────────────────────────────────────── */}
+          {isCorrectFold ? (
+            <View style={styles.cfHero}>
+              <View style={styles.cfIconRow}>
+                <Feather name="check-circle" size={36} color="#27AE60" />
               </View>
-            ) : resultConfig ? (
-              <View style={[styles.sdWinBadge, { backgroundColor: resultConfig.bg, borderColor: resultConfig.color + '60' }]}>
-                <Text style={[styles.sdWinLabel, { color: resultConfig.color }]}>{resultConfig.label}</Text>
-                <Text style={[styles.sdWinSub, { color: colors.mutedForeground }]}>{resultConfig.sublabel}</Text>
-              </View>
-            ) : null}
-            {state.heroCards.length === 2 && (
-              <View style={[styles.sdHandRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <View style={styles.sdHandItem}>
-                  <Text style={[styles.sdHandWho, { color: state.showdownResult === 'hero' ? '#27AE60' : colors.mutedForeground }]}>YOU</Text>
-                  <Text style={[styles.sdHandName, { color: heroHandResult ? MADE_HAND_COLORS[heroHandResult.hand] : colors.foreground }]}>
-                    {heroHandResult?.hand ?? 'High Card'}
+              <Text style={styles.cfTitle}>CORRECT FOLD</Text>
+              <Text style={styles.cfSubtitle}>Outstanding discipline — chips saved!</Text>
+              {foldAdvice ? (
+                <View style={[styles.cfAdviceBox, { backgroundColor: colors.card, borderColor: '#27AE6040' }]}>
+                  <Text style={[styles.cfAdviceText, { color: colors.foreground }]}>{foldAdvice}</Text>
+                </View>
+              ) : null}
+              <Text style={[styles.cfMotivation, { color: '#27AE6088' }]}>
+                Knowing when NOT to play is one of the most profitable skills in poker.
+              </Text>
+            </View>
+          ) : (
+            /* ── NORMAL RESULT ──────────────────────────────────────── */
+            <View style={styles.sdResultSection}>
+              {isPreflopMode && !state.showdownResult ? (
+                <View style={[styles.sdWinBadge, { backgroundColor: '#A8882A18', borderColor: '#A8882A50' }]}>
+                  <Text style={[styles.sdWinLabel, { color: colors.goldLight }]}>PREFLOP DRILL COMPLETE</Text>
+                  <Text style={[styles.sdWinSub, { color: colors.mutedForeground }]}>
+                    {state.analysis?.isGTO ? '✓ GTO decision' : '✗ Mistake — see coach for details'}
                   </Text>
                 </View>
-                {villainFaceUpCards.length === 2 ? (
-                  <>
-                    <Text style={[styles.sdVs, { color: colors.mutedForeground }]}>vs</Text>
-                    <View style={[styles.sdHandItem, { alignItems: 'flex-end' }]}>
-                      <Text style={[styles.sdHandWho, { color: state.showdownResult === 'villain' ? '#E74C3C' : colors.mutedForeground }]}>
-                        {mainVillainPlayer?.name ?? 'VILLAIN'}
-                      </Text>
-                      <Text style={[styles.sdHandName, { color: villainHandResult ? MADE_HAND_COLORS[villainHandResult.hand] : colors.foreground }]}>
-                        {villainHandResult?.hand ?? 'High Card'}
-                      </Text>
-                    </View>
-                  </>
-                ) : (
-                  <>
-                    <Text style={[styles.sdVs, { color: colors.mutedForeground }]}>vs</Text>
-                    <View style={[styles.sdHandItem, { alignItems: 'flex-end' }]}>
-                      <Text style={[styles.sdHandWho, { color: colors.mutedForeground }]}>
-                        {mainVillainPlayer?.name ?? 'VILLAIN'}
-                      </Text>
-                      <Text style={[styles.sdHandName, { color: '#E74C3C' }]}>Folded</Text>
-                    </View>
-                  </>
-                )}
-              </View>
-            )}
-
-            {/* Correct fold praise card */}
-            {isCorrectFold && (
-              <View style={[styles.correctFoldPraise, { backgroundColor: '#27AE6012', borderColor: '#27AE6045' }]}>
-                <View style={styles.correctFoldHeaderRow}>
-                  <Feather name="check-circle" size={16} color="#27AE60" />
-                  <Text style={[styles.correctFoldHeadline, { color: '#27AE60' }]}>Outstanding discipline!</Text>
+              ) : resultConfig ? (
+                <View style={[styles.sdWinBadge, { backgroundColor: resultConfig.bg, borderColor: resultConfig.color + '60' }]}>
+                  <Text style={[styles.sdWinLabel, { color: resultConfig.color }]}>{resultConfig.label}</Text>
+                  <Text style={[styles.sdWinSub, { color: colors.mutedForeground }]}>{resultConfig.sublabel}</Text>
                 </View>
-                {foldAdvice ? (
-                  <Text style={[styles.correctFoldBody, { color: colors.mutedForeground }]}>{foldAdvice}</Text>
-                ) : null}
-                <Text style={[styles.correctFoldFooter, { color: '#27AE6099' }]}>
-                  Knowing when NOT to play is one of the most profitable skills in poker.
-                </Text>
-              </View>
-            )}
-          </View>
+              ) : null}
+              {state.heroCards.length === 2 && (
+                <View style={[styles.sdHandRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <View style={styles.sdHandItem}>
+                    <Text style={[styles.sdHandWho, { color: state.showdownResult === 'hero' ? '#27AE60' : colors.mutedForeground }]}>YOU</Text>
+                    <Text style={[styles.sdHandName, { color: heroHandResult ? MADE_HAND_COLORS[heroHandResult.hand] : colors.foreground }]}>
+                      {heroHandResult?.hand ?? 'High Card'}
+                    </Text>
+                  </View>
+                  {villainFaceUpCards.length === 2 ? (
+                    <>
+                      <Text style={[styles.sdVs, { color: colors.mutedForeground }]}>vs</Text>
+                      <View style={[styles.sdHandItem, { alignItems: 'flex-end' }]}>
+                        <Text style={[styles.sdHandWho, { color: state.showdownResult === 'villain' ? '#E74C3C' : colors.mutedForeground }]}>
+                          {mainVillainPlayer?.name ?? 'VILLAIN'}
+                        </Text>
+                        <Text style={[styles.sdHandName, { color: villainHandResult ? MADE_HAND_COLORS[villainHandResult.hand] : colors.foreground }]}>
+                          {villainHandResult?.hand ?? 'High Card'}
+                        </Text>
+                      </View>
+                    </>
+                  ) : (
+                    <>
+                      <Text style={[styles.sdVs, { color: colors.mutedForeground }]}>vs</Text>
+                      <View style={[styles.sdHandItem, { alignItems: 'flex-end' }]}>
+                        <Text style={[styles.sdHandWho, { color: colors.mutedForeground }]}>
+                          {mainVillainPlayer?.name ?? 'VILLAIN'}
+                        </Text>
+                        <Text style={[styles.sdHandName, { color: '#E74C3C' }]}>Folded</Text>
+                      </View>
+                    </>
+                  )}
+                </View>
+              )}
+            </View>
+          )}
 
           {/* Report + Next hand buttons */}
           <View style={styles.nextHandBar}>
@@ -835,9 +839,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3, shadowRadius: 6, elevation: 8,
   },
   nextHandFixedText: { fontSize: 17, fontWeight: '900', letterSpacing: 1.5, color: '#0D1B0F' },
-  correctFoldPraise: { borderRadius: 12, borderWidth: 1.5, paddingVertical: 12, paddingHorizontal: 14, gap: 7 },
-  correctFoldHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  correctFoldHeadline: { fontSize: 15, fontWeight: '900', letterSpacing: 0.2 },
-  correctFoldBody: { fontSize: 12, lineHeight: 18, fontWeight: '500' },
-  correctFoldFooter: { fontSize: 11, lineHeight: 16, fontStyle: 'italic' },
+  cfHero: { alignItems: 'center', paddingHorizontal: 20, paddingTop: 14, paddingBottom: 6, gap: 8 },
+  cfIconRow: { marginBottom: 2 },
+  cfTitle: { fontSize: 28, fontWeight: '900', letterSpacing: 1.5, color: '#27AE60' },
+  cfSubtitle: { fontSize: 14, fontWeight: '700', color: '#27AE60', opacity: 0.85, marginBottom: 4 },
+  cfAdviceBox: { borderRadius: 10, borderWidth: 1, paddingVertical: 10, paddingHorizontal: 14, alignSelf: 'stretch' },
+  cfAdviceText: { fontSize: 13, lineHeight: 19, fontWeight: '500' },
+  cfMotivation: { fontSize: 11, fontStyle: 'italic', textAlign: 'center', lineHeight: 16 },
 });
