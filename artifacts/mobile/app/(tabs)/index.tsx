@@ -672,7 +672,7 @@ export default function PlayScreen() {
                       <Text style={{ color: colors.foreground, fontWeight: '700' }}>Seats</Text>
                       {' '}— assign a player type to each seat at the table: TAG (tight-aggressive), LAG (loose-aggressive), Nit, Fish, Maniac, or GTO. Mix and match to simulate any table dynamic you face in real games.{'\n\n'}
                       <Text style={{ color: colors.foreground, fontWeight: '700' }}>Difficulty</Text>
-                      {' '}— scale the challenge from Beginner through to Expert to match your current skill level.
+                      {' '}— controls how much guidance you receive, not how hard the opponents play. On Beginner you get detailed hints, equity numbers, and coaching prompts at every decision. As you move up through Novice, Intermediate, Advanced, and Expert, hints are progressively stripped away until on Expert you are playing blind — no guidance, no nudges, just you and the cards. The opponents behave the same at every level; it is the safety net that changes.
                     </Text>
                   </View>
                 </View>
