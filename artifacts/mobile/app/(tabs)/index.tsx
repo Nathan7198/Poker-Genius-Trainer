@@ -352,7 +352,7 @@ export default function PlayScreen() {
             style={[styles.diffBtn, { backgroundColor: diffColors[state.difficulty] + '22', borderColor: diffColors[state.difficulty] + '66' }]}
             onPress={() => { setShowDifficultyPicker(!showDifficultyPicker); setShowModePicker(false); setShowTablePicker(false); setShowFormatPicker(false); setShowSeatsPicker(false); }}
           >
-            <Text style={styles.diffBtnLabel}>DIFFICULTY</Text>
+            <Text style={styles.diffBtnLabel} numberOfLines={1}>DIFFICULTY</Text>
             <Text style={[styles.diffBtnText, { color: diffColors[state.difficulty] }]} numberOfLines={1}>
               {state.difficulty}
             </Text>
@@ -848,7 +848,7 @@ const styles = StyleSheet.create({
   mathBotChip: { paddingHorizontal: 9, paddingVertical: 4, borderRadius: 6, borderWidth: 1 },
   mathBotChipText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
   diffBtn: { flex: 1, paddingHorizontal: 4, paddingVertical: 5, borderRadius: 8, borderWidth: 1, alignItems: 'center' },
-  diffBtnLabel: { fontSize: 8, fontWeight: '700', letterSpacing: 1.5, color: '#888', marginBottom: 1 },
+  diffBtnLabel: { fontSize: 8, fontWeight: '700', letterSpacing: 0.5, color: '#888', marginBottom: 1 },
   diffBtnText: { fontSize: 12, fontWeight: '800', letterSpacing: 0.3 },
   diffPicker: {
     position: 'absolute', right: 12, zIndex: 100,
