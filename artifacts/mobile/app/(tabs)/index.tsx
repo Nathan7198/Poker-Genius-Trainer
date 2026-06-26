@@ -17,6 +17,7 @@ import CustomSetup from '@/components/CustomSetup';
 import {
   DIFFICULTIES, DIFFICULTY_DESCRIPTIONS, getHandNotation,
   evaluateMadeHand, MADE_HAND_COLORS, PREFLOP_ORDER, PLAYER_TYPE_INFO,
+  POSITION_COLORS, getPositionsForSize,
 } from '@/constants/pokerData';
 import type { Difficulty, PlayerType } from '@/constants/pokerData';
 import MathPanel from '@/components/MathPanel';
@@ -29,7 +30,7 @@ function cardLabel(rank: string, suit: string) {
 }
 
 export default function PlayScreen() {
-  const { state, startNewHand, setDifficulty, setTrainingMode, setMathBotStyle, setTableSize, setGameFormat, goIdle } = useGame();
+  const { state, startNewHand, setDifficulty, setTrainingMode, setMathBotStyle, setMathPlayerType, setTableSize, setGameFormat, goIdle } = useGame();
   const { logHandHistory, recordHandResult } = useStats();
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -518,6 +519,50 @@ export default function PlayScreen() {
                 Hero always at bottom · Boards never repeat · Full street coaching
               </Text>
 
+              {/* Per-seat player type setup (math mode only) */}
+              {state.trainingMode === 'math' && (
+                <View style={[styles.tableSetup, { backgroundColor: colors.card, borderColor: '#3B82F630' }]}>
+                  <Text style={[styles.tableSetupHeader, { color: '#3B82F6' }]}>TABLE SETUP</Text>
+                  <Text style={[styles.tableSetupSubtext, { color: colors.mutedForeground }]}>
+                    Set an opponent type for each seat. Hero position rotates — any seat can be you.
+                  </Text>
+                  {getPositionsForSize(state.tableSize).map(pos => {
+                    const posColor = POSITION_COLORS[pos] ?? '#888';
+                    const current = state.mathPlayerTypes[pos] ?? null;
+                    return (
+                      <View key={pos} style={styles.tableSetupRow}>
+                        <View style={[styles.tableSetupPosBadge, { backgroundColor: posColor }]}>
+                          <Text style={styles.tableSetupPosText}>{pos}</Text>
+                        </View>
+                        <View style={styles.tableSetupChips}>
+                          <TouchableOpacity
+                            style={[styles.tableSetupChip, { borderColor: current === null ? '#3B82F6' : '#3B82F633', backgroundColor: current === null ? '#3B82F618' : 'transparent' }]}
+                            onPress={() => setMathPlayerType(pos, null)}
+                          >
+                            <Text style={[styles.tableSetupChipText, { color: current === null ? '#3B82F6' : colors.mutedForeground }]}>DEF</Text>
+                          </TouchableOpacity>
+                          {(['TAG', 'LAG', 'Nit', 'Fish', 'Maniac'] as PlayerType[]).map(t => {
+                            const isSel = current === t;
+                            const col = PLAYER_TYPE_INFO[t].color;
+                            return (
+                              <TouchableOpacity
+                                key={t}
+                                style={[styles.tableSetupChip, { borderColor: isSel ? col : col + '44', backgroundColor: isSel ? col + '22' : 'transparent' }]}
+                                onPress={() => setMathPlayerType(pos, isSel ? null : t)}
+                              >
+                                <Text style={[styles.tableSetupChipText, { color: isSel ? col : colors.mutedForeground }]}>
+                                  {t === 'Maniac' ? 'MNI' : t}
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+
               {/* App feature guide */}
               <View style={[styles.featureGuide, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <View style={styles.featureRow}>
@@ -793,6 +838,15 @@ const styles = StyleSheet.create({
   idleSubtext: { fontSize: 11, textAlign: 'center', fontStyle: 'italic' },
   mathScrollBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#3B82F6', paddingVertical: 10 },
   mathScrollBannerText: { color: '#fff', fontSize: 12, fontWeight: '900', letterSpacing: 1.5 },
+  tableSetup: { borderRadius: 12, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 12, alignSelf: 'stretch', gap: 8 },
+  tableSetupHeader: { fontSize: 10, fontWeight: '900', letterSpacing: 2 },
+  tableSetupSubtext: { fontSize: 10, lineHeight: 14, marginBottom: 2 },
+  tableSetupRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  tableSetupPosBadge: { paddingHorizontal: 6, paddingVertical: 3, borderRadius: 4, minWidth: 38, alignItems: 'center' },
+  tableSetupPosText: { color: '#FFF', fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
+  tableSetupChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, flex: 1 },
+  tableSetupChip: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 5, borderWidth: 1 },
+  tableSetupChipText: { fontSize: 9, fontWeight: '800', letterSpacing: 0.3 },
   featureGuide: { borderRadius: 12, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 4, alignSelf: 'stretch' },
   featureRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 10, gap: 10 },
   featureText: { flex: 1 },

@@ -147,8 +147,10 @@ export interface GameState {
   heroTotalInvestedBB: number;
   /** 'full' = all streets, 'preflop' = preflop drill only, 'gto' = GTO bots no hints, 'custom' = configured scenario, 'math' = detailed math coaching with configurable bots */
   trainingMode: 'full' | 'preflop' | 'gto' | 'custom' | 'math';
-  /** Bot style for math mode — 'gto' or a player archetype */
+  /** Bot style for math mode — 'gto' or a player archetype (global default) */
   mathBotStyle: 'gto' | PlayerType;
+  /** Per-position type overrides for math mode — takes priority over mathBotStyle */
+  mathPlayerTypes: Partial<Record<string, PlayerType>>;
   /** Number of players at the table (2–9). Default 6 (6-max). */
   tableSize: number;
   /** Non-hero positions still active in the hand (post-preflop) */
@@ -167,6 +169,7 @@ type GameAction =
   | { type: 'SET_DIFFICULTY'; difficulty: Difficulty }
   | { type: 'SET_TRAINING_MODE'; mode: 'full' | 'preflop' | 'gto' | 'custom' | 'math' }
   | { type: 'SET_MATH_BOT_STYLE'; style: 'gto' | PlayerType }
+  | { type: 'SET_MATH_PLAYER_TYPE'; position: string; style: PlayerType | null }
   | { type: 'SET_TABLE_SIZE'; tableSize: number }
   | { type: 'SET_GAME_FORMAT'; format: 'cash' | 'tournament' }
   | { type: 'START_HAND' }
@@ -196,7 +199,7 @@ function buildInitialState(): GameState {
     postFlopStreetsDone: [], recentBoardSigs: [],
     showdownResult: null, villainFolded: false,
     heroCheckedStreet: null, heroTotalInvestedBB: 0,
-    trainingMode: 'full', mathBotStyle: 'gto', tableSize: 6,
+    trainingMode: 'full', mathBotStyle: 'gto', mathPlayerTypes: {}, tableSize: 6,
     handActivePlayers: [], playerStreetActions: {},
     gameFormat: 'cash',
     tournamentStacks: { hero: 100, bots: {} },
@@ -573,6 +576,16 @@ function gameReducer(state: GameState, action: GameAction): GameState {
     case 'SET_MATH_BOT_STYLE':
       return { ...state, mathBotStyle: action.style };
 
+    case 'SET_MATH_PLAYER_TYPE': {
+      const updated = { ...state.mathPlayerTypes };
+      if (action.style === null) {
+        delete updated[action.position];
+      } else {
+        updated[action.position] = action.style;
+      }
+      return { ...state, mathPlayerTypes: updated };
+    }
+
     case 'SET_TABLE_SIZE':
       return { ...state, tableSize: Math.max(2, Math.min(9, action.tableSize)) };
 
@@ -652,10 +665,12 @@ function gameReducer(state: GameState, action: GameAction): GameState {
           const tournamentStack = state.gameFormat === 'tournament'
             ? Math.max(0, baseStack - (pos === 'BB' ? 1 : pos === 'SB' ? 0.5 : 0))
             : baseStack;
-          // Math mode: use the selected bot archetype for all bots when not GTO
-          const botType: PlayerType = state.trainingMode === 'math' && state.mathBotStyle !== 'gto'
-            ? state.mathBotStyle as PlayerType
-            : PLAYER_TYPE_LIST[i % PLAYER_TYPE_LIST.length];
+          // Math mode: per-position override → global mathBotStyle → rotating default
+          const posOverride = state.trainingMode === 'math' ? state.mathPlayerTypes[pos] : undefined;
+          const botType: PlayerType = posOverride
+            ?? (state.trainingMode === 'math' && state.mathBotStyle !== 'gto'
+              ? state.mathBotStyle as PlayerType
+              : PLAYER_TYPE_LIST[i % PLAYER_TYPE_LIST.length]);
           players.push({
             id: i, name: PLAYER_NAMES[i % PLAYER_NAMES.length],
             type: botType,
@@ -1667,6 +1682,7 @@ interface GameContextType {
   setDifficulty: (d: Difficulty) => void;
   setTrainingMode: (mode: 'full' | 'preflop' | 'gto' | 'custom' | 'math') => void;
   setMathBotStyle: (style: 'gto' | PlayerType) => void;
+  setMathPlayerType: (position: string, style: PlayerType | null) => void;
   setTableSize: (size: number) => void;
   setGameFormat: (format: 'cash' | 'tournament') => void;
   startNewHand: () => void;
@@ -1686,6 +1702,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const setDifficulty = useCallback((d: Difficulty) => dispatch({ type: 'SET_DIFFICULTY', difficulty: d }), []);
   const setTrainingMode = useCallback((mode: 'full' | 'preflop' | 'gto' | 'custom' | 'math') => dispatch({ type: 'SET_TRAINING_MODE', mode }), []);
   const setMathBotStyle = useCallback((style: 'gto' | PlayerType) => dispatch({ type: 'SET_MATH_BOT_STYLE', style }), []);
+  const setMathPlayerType = useCallback((position: string, style: PlayerType | null) => dispatch({ type: 'SET_MATH_PLAYER_TYPE', position, style }), []);
   const setTableSize = useCallback((size: number) => dispatch({ type: 'SET_TABLE_SIZE', tableSize: size }), []);
   const startNewHand = useCallback(() => dispatch({ type: 'START_HAND' }), []);
   const startCustomHand = useCallback((config: CustomHandConfig) => dispatch({ type: 'START_CUSTOM_HAND', config }), []);
@@ -1698,7 +1715,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const setGameFormat = useCallback((format: 'cash' | 'tournament') => dispatch({ type: 'SET_GAME_FORMAT', format }), []);
 
   return (
-    <GameContext.Provider value={{ state, setDifficulty, setTrainingMode, setMathBotStyle, setTableSize, setGameFormat, startNewHand, startCustomHand, goIdle, heroAct, heroPostFlopAct, advancePhase, foldToVillainBet, dismissAnalysis }}>
+    <GameContext.Provider value={{ state, setDifficulty, setTrainingMode, setMathBotStyle, setMathPlayerType, setTableSize, setGameFormat, startNewHand, startCustomHand, goIdle, heroAct, heroPostFlopAct, advancePhase, foldToVillainBet, dismissAnalysis }}>
       {children}
     </GameContext.Provider>
   );
