@@ -189,12 +189,25 @@ export default function PlayScreen() {
     ? evaluateMadeHand(villainFaceUpCards, board)
     : null;
 
+  // ── Correct fold detection ────────────────────────────────────────────────
+  const heroFolded = state.lastHeroAction === 'fold';
+  const lastPFLFold = [...state.postFlopAnalysisHistory].reverse().find(a => a.heroAction === 'fold');
+  const foldIsGTO = heroFolded
+    ? (state.analysis?.isGTO ?? false)
+    : (lastPFLFold?.isGTO ?? false);
+  const foldAdvice = heroFolded
+    ? (state.analysis?.advice ?? '')
+    : (lastPFLFold?.advice ?? '');
+  const isCorrectFold = state.showdownResult === 'villain' && !state.villainFolded && foldIsGTO;
+
   const resultConfig = isShowdown && state.showdownResult
     ? {
         hero: { label: '🏆 YOU WIN', sublabel: `Pot: ${state.pot.toFixed(1)}BB`, color: '#27AE60', bg: '#27AE6020' },
         villain: state.villainFolded
           ? { label: '✓ VILLAIN FOLDED', sublabel: `You win ${state.pot.toFixed(1)}BB`, color: '#27AE60', bg: '#27AE6020' }
-          : { label: '✗ VILLAIN WINS', sublabel: `Pot: ${state.pot.toFixed(1)}BB`, color: '#E74C3C', bg: '#E74C3C20' },
+          : isCorrectFold
+            ? { label: '✓ CORRECT FOLD!', sublabel: 'Optimal decision — well played', color: '#27AE60', bg: '#27AE6020' }
+            : { label: '✗ VILLAIN WINS', sublabel: `Pot: ${state.pot.toFixed(1)}BB`, color: '#E74C3C', bg: '#E74C3C20' },
         tie: { label: '= TIE', sublabel: `Chop: ${(state.pot / 2).toFixed(1)}BB each`, color: '#E5C76B', bg: '#E5C76B20' },
       }[state.showdownResult]
     : null;
@@ -632,6 +645,22 @@ export default function PlayScreen() {
                 )}
               </View>
             )}
+
+            {/* Correct fold praise card */}
+            {isCorrectFold && (
+              <View style={[styles.correctFoldPraise, { backgroundColor: '#27AE6012', borderColor: '#27AE6045' }]}>
+                <View style={styles.correctFoldHeaderRow}>
+                  <Feather name="check-circle" size={16} color="#27AE60" />
+                  <Text style={[styles.correctFoldHeadline, { color: '#27AE60' }]}>Outstanding discipline!</Text>
+                </View>
+                {foldAdvice ? (
+                  <Text style={[styles.correctFoldBody, { color: colors.mutedForeground }]}>{foldAdvice}</Text>
+                ) : null}
+                <Text style={[styles.correctFoldFooter, { color: '#27AE6099' }]}>
+                  Knowing when NOT to play is one of the most profitable skills in poker.
+                </Text>
+              </View>
+            )}
           </View>
 
           {/* Report + Next hand buttons */}
@@ -806,4 +835,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3, shadowRadius: 6, elevation: 8,
   },
   nextHandFixedText: { fontSize: 17, fontWeight: '900', letterSpacing: 1.5, color: '#0D1B0F' },
+  correctFoldPraise: { borderRadius: 12, borderWidth: 1.5, paddingVertical: 12, paddingHorizontal: 14, gap: 7 },
+  correctFoldHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  correctFoldHeadline: { fontSize: 15, fontWeight: '900', letterSpacing: 0.2 },
+  correctFoldBody: { fontSize: 12, lineHeight: 18, fontWeight: '500' },
+  correctFoldFooter: { fontSize: 11, lineHeight: 16, fontStyle: 'italic' },
 });
