@@ -380,33 +380,6 @@ export const STRENGTH_COLORS: Record<HandStrength, string> = {
 export type MistakeType = 'folded_too_tight'|'called_too_loose'|'bad_sizing'|'ignored_pot_odds'|'bad_bluff'|'missed_value'|'limp_utg';
 
 // ── Post-hand reasoning capture ──────────────────────────────────────────────
-export type ReasoningTag =
-  // non-fold decisions (call / check / raise)
-  | 'protect' | 'value' | 'bluff' | 'unknown' | 'fold_equity' | 'board_fear'
-  // fold decisions (any street)
-  | 'range_miss' | 'range_unknown' | 'vs_aggression' | 'speculative' | 'pot_odds'
-  // legacy — kept for backward compat with stored data
-  | 'oop_concern' | 'stack_mismatch';
-
-// Shown when hero's last action in the hand was a fold (preflop or postflop)
-export const FOLD_REASONING_OPTIONS: { tag: ReasoningTag; label: string; icon: string; color: string }[] = [
-  { tag: 'range_miss',    label: 'Outside my range for this spot', icon: 'x-circle',      color: '#E74C3C' },
-  { tag: 'pot_odds',      label: "Pot odds weren't right",         icon: 'percent',        color: '#E67E22' },
-  { tag: 'vs_aggression', label: 'Facing too much aggression',     icon: 'zap',            color: '#3498DB' },
-  { tag: 'range_unknown', label: "Didn't know if I should fold",   icon: 'help-circle',    color: '#95A5A6' },
-  { tag: 'speculative',   label: 'Hand too marginal to continue',  icon: 'minus-circle',   color: '#9B59B6' },
-  { tag: 'board_fear',    label: 'Board hit his range',            icon: 'alert-triangle', color: '#C0392B' },
-];
-
-// Shown when hero called, checked, or raised
-export const REASONING_OPTIONS: { tag: ReasoningTag; label: string; icon: string; color: string }[] = [
-  { tag: 'value',       label: 'Value bet / call',             icon: 'dollar-sign',    color: '#27AE60' },
-  { tag: 'protect',     label: 'Protect / deny equity',        icon: 'shield',         color: '#3498DB' },
-  { tag: 'bluff',       label: 'Bluff / semi-bluff',           icon: 'eye-off',        color: '#E67E22' },
-  { tag: 'fold_equity', label: 'Looking for fold equity',      icon: 'trending-up',    color: '#9B59B6' },
-  { tag: 'board_fear',  label: 'Board put me in a tough spot', icon: 'alert-triangle', color: '#E74C3C' },
-  { tag: 'unknown',     label: "Didn't know what to do",       icon: 'help-circle',    color: '#95A5A6' },
-];
 
 export const MISTAKE_LABELS: Record<MistakeType, string> = {
   folded_too_tight: 'Folding Too Tight',

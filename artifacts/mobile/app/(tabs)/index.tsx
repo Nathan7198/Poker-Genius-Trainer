@@ -20,7 +20,7 @@ import {
   evaluateMadeHand, MADE_HAND_COLORS, PREFLOP_ORDER, PLAYER_TYPE_INFO,
   POSITION_COLORS, getPositionsForSize,
 } from '@/constants/pokerData';
-import type { Difficulty, PlayerType, ReasoningTag } from '@/constants/pokerData';
+import type { Difficulty, PlayerType } from '@/constants/pokerData';
 import MathPanel from '@/components/MathPanel';
 
 const SUIT_SYMBOLS: Record<string, string> = { s: '♠', h: '♥', d: '♦', c: '♣' };
@@ -91,7 +91,7 @@ function TableSetupPanel({ colors, state, setMathPlayerType, liveHand }: {
 
 export default function PlayScreen() {
   const { state, startNewHand, setDifficulty, setTrainingMode, setMathBotStyle, setMathPlayerType, setTableSize, setGameFormat, goIdle, advanceBlindLevel } = useGame();
-  const { stats, logHandHistory, attachReasoning, recordHandResult } = useStats();
+  const { stats, logHandHistory, recordHandResult } = useStats();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const [showDifficultyPicker, setShowDifficultyPicker] = React.useState(false);
@@ -898,11 +898,7 @@ export default function PlayScreen() {
         visible={showReasoningModal}
         heroFolded={heroFolded || !!lastPFLFold}
         hand={stats.handHistory.find(h => h.handNumber === lastLoggedHand.current)}
-        onSelect={(tag: ReasoningTag | null) => {
-          setShowReasoningModal(false);
-          if (tag !== null) attachReasoning(lastLoggedHand.current, tag);
-          startNewHand();
-        }}
+        onNext={() => { setShowReasoningModal(false); startNewHand(); }}
       />
     </View>
   );

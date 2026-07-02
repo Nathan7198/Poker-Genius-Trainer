@@ -7,7 +7,7 @@ import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
 import { useStats } from '@/context/StatsContext';
-import type { HandHistoryEntry, PlayerPattern } from '@/context/StatsContext';
+import type { HandHistoryEntry } from '@/context/StatsContext';
 import { MISTAKE_LABELS, MistakeType, POSITION_COLORS } from '@/constants/pokerData';
 
 const ALL_MISTAKES: MistakeType[] = [
@@ -165,11 +165,9 @@ function HandHistoryRow({ entry, colors }: { entry: HandHistoryEntry; colors: an
 export default function StatsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { stats, getAlerts, getMistakeCount, clearMistakes, getProfile } = useStats();
+  const { stats, getAlerts, getMistakeCount, clearMistakes } = useStats();
   const alerts = getAlerts();
   const totalMistakes = stats.mistakes.length;
-  const profile = getProfile();
-  const handsWithReasoning = stats.handHistory.filter(h => (h as any).reasoning !== undefined).length;
   const topPad = Platform.OS === 'web' ? insets.top + 10 : insets.top + 4;
   const maxCount = Math.max(...ALL_MISTAKES.map(m => getMistakeCount(m)), 1);
 
@@ -218,37 +216,6 @@ export default function StatsScreen() {
               : '—'}
             colors={colors}
           />
-        </View>
-
-        {/* Player Profile */}
-        <View style={{ paddingHorizontal: 16, marginBottom: 16 }}>
-          <View style={[styles.profileHeader]}>
-            <Text style={[styles.sectionTitle, { color: colors.foreground, marginBottom: 0 }]}>Your Profile</Text>
-            {handsWithReasoning > 0 && (
-              <Text style={[styles.profileHandCount, { color: colors.mutedForeground }]}>
-                {handsWithReasoning} hand{handsWithReasoning !== 1 ? 's' : ''} analysed
-              </Text>
-            )}
-          </View>
-          {profile.length === 0 ? (
-            <View style={[styles.profileEmpty, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Feather name="user" size={22} color={colors.mutedForeground} />
-              <Text style={[styles.profileEmptyTitle, { color: colors.foreground }]}>
-                {handsWithReasoning < 5
-                  ? `Play ${Math.max(0, 5 - handsWithReasoning)} more hand${5 - handsWithReasoning !== 1 ? 's' : ''} to build your profile`
-                  : 'No patterns detected yet'}
-              </Text>
-              <Text style={[styles.profileEmptyText, { color: colors.mutedForeground }]}>
-                After each hand, tell the app why you acted. It builds a profile of your thinking — not just whether you were right.
-              </Text>
-            </View>
-          ) : (
-            <View style={{ gap: 8 }}>
-              {profile.map(p => (
-                <PatternCard key={p.id} pattern={p} colors={colors} />
-              ))}
-            </View>
-          )}
         </View>
 
         {/* Alerts */}
@@ -348,19 +315,6 @@ function SummaryCard({ label, value, valueColor, colors }: { label: string; valu
   );
 }
 
-function PatternCard({ pattern, colors }: { pattern: PlayerPattern; colors: any }) {
-  const severityColor = pattern.severity === 'high' ? '#E74C3C' : pattern.severity === 'medium' ? '#E67E22' : '#3498DB';
-  return (
-    <View style={[styles.patternCard, { backgroundColor: severityColor + '0E', borderColor: severityColor + '44' }]}>
-      <View style={styles.patternTop}>
-        <View style={[styles.patternSeverityDot, { backgroundColor: severityColor }]} />
-        <Text style={[styles.patternHeadline, { color: colors.foreground }]}>{pattern.headline}</Text>
-      </View>
-      <Text style={[styles.patternDetail, { color: colors.foreground }]}>{pattern.detail}</Text>
-      <Text style={[styles.patternEvidence, { color: severityColor }]}>{pattern.evidence}</Text>
-    </View>
-  );
-}
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
@@ -432,16 +386,4 @@ const styles = StyleSheet.create({
   foldedNote: { fontSize: 11, fontStyle: 'italic' },
   histTime: { fontSize: 10, textAlign: 'right' },
 
-  // Profile
-  profileHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
-  profileHandCount: { fontSize: 11, fontWeight: '600' },
-  profileEmpty: { borderRadius: 12, borderWidth: 1, padding: 20, alignItems: 'center', gap: 8 },
-  profileEmptyTitle: { fontSize: 14, fontWeight: '700', textAlign: 'center' },
-  profileEmptyText: { fontSize: 12, textAlign: 'center', lineHeight: 18 },
-  patternCard: { borderRadius: 12, borderWidth: 1, padding: 14 },
-  patternTop: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
-  patternSeverityDot: { width: 8, height: 8, borderRadius: 4 },
-  patternHeadline: { fontSize: 14, fontWeight: '800', flex: 1 },
-  patternDetail: { fontSize: 12, lineHeight: 18, marginBottom: 6 },
-  patternEvidence: { fontSize: 11, fontWeight: '600', fontStyle: 'italic' },
 });
