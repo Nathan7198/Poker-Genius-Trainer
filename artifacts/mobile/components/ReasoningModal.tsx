@@ -5,16 +5,16 @@ import {
 import * as Haptics from 'expo-haptics';
 import { Feather } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
-import { ReasoningTag, REASONING_OPTIONS, PREFLOP_REASONING_OPTIONS } from '@/constants/pokerData';
+import { ReasoningTag, REASONING_OPTIONS, FOLD_REASONING_OPTIONS } from '@/constants/pokerData';
 
 interface Props {
   visible: boolean;
-  preflopFold?: boolean;
+  heroFolded?: boolean;
   onSelect: (tag: ReasoningTag | null) => void;
 }
 
-export default function ReasoningModal({ visible, preflopFold, onSelect }: Props) {
-  const options = preflopFold ? PREFLOP_REASONING_OPTIONS : REASONING_OPTIONS;
+export default function ReasoningModal({ visible, heroFolded, onSelect }: Props) {
+  const options = heroFolded ? FOLD_REASONING_OPTIONS : REASONING_OPTIONS;
   const colors = useColors();
   const slideAnim = useRef(new Animated.Value(300)).current;
 
@@ -54,7 +54,7 @@ export default function ReasoningModal({ visible, preflopFold, onSelect }: Props
           <View style={[styles.handle, { backgroundColor: colors.border }]} />
 
           <Text style={[styles.question, { color: colors.foreground }]}>
-            {preflopFold ? 'Why did you fold preflop?' : 'Why did you make that decision?'}
+            {heroFolded ? 'Why did you fold?' : 'Why did you make that play?'}
           </Text>
           <Text style={[styles.sub, { color: colors.mutedForeground }]}>
             Your answer builds your player profile

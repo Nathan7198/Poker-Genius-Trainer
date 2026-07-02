@@ -896,7 +896,7 @@ export default function PlayScreen() {
       <HandReportModal visible={showHandReport} onClose={() => setShowHandReport(false)} />
       <ReasoningModal
         visible={showReasoningModal}
-        preflopFold={state.lastHeroAction === 'fold'}
+        heroFolded={heroFolded || !!lastPFLFold}
         onSelect={(tag: ReasoningTag | null) => {
           setShowReasoningModal(false);
           if (tag !== null) attachReasoning(lastLoggedHand.current, tag);

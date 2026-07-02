@@ -381,27 +381,31 @@ export type MistakeType = 'folded_too_tight'|'called_too_loose'|'bad_sizing'|'ig
 
 // ── Post-hand reasoning capture ──────────────────────────────────────────────
 export type ReasoningTag =
-  // postflop decisions
+  // non-fold decisions (call / check / raise)
   | 'protect' | 'value' | 'bluff' | 'unknown' | 'fold_equity' | 'board_fear'
-  // preflop fold reasons
-  | 'range_miss' | 'range_unknown' | 'vs_aggression' | 'speculative' | 'oop_concern' | 'stack_mismatch';
+  // fold decisions (any street)
+  | 'range_miss' | 'range_unknown' | 'vs_aggression' | 'speculative' | 'pot_odds'
+  // legacy — kept for backward compat with stored data
+  | 'oop_concern' | 'stack_mismatch';
 
-export const REASONING_OPTIONS: { tag: ReasoningTag; label: string; icon: string; color: string }[] = [
-  { tag: 'protect',     label: 'Protect my hand',               icon: 'shield',          color: '#3498DB' },
-  { tag: 'value',       label: 'Value',                         icon: 'dollar-sign',     color: '#27AE60' },
-  { tag: 'bluff',       label: 'Bluff',                         icon: 'eye-off',         color: '#E67E22' },
-  { tag: 'unknown',     label: "Didn't know",                   icon: 'help-circle',     color: '#95A5A6' },
-  { tag: 'fold_equity', label: 'Thought villain folds too much', icon: 'trending-up',    color: '#9B59B6' },
-  { tag: 'board_fear',  label: 'Thought board favoured him',    icon: 'alert-triangle',  color: '#E74C3C' },
+// Shown when hero's last action in the hand was a fold (preflop or postflop)
+export const FOLD_REASONING_OPTIONS: { tag: ReasoningTag; label: string; icon: string; color: string }[] = [
+  { tag: 'range_miss',    label: 'Outside my range for this spot', icon: 'x-circle',      color: '#E74C3C' },
+  { tag: 'pot_odds',      label: "Pot odds weren't right",         icon: 'percent',        color: '#E67E22' },
+  { tag: 'vs_aggression', label: 'Facing too much aggression',     icon: 'zap',            color: '#3498DB' },
+  { tag: 'range_unknown', label: "Didn't know if I should fold",   icon: 'help-circle',    color: '#95A5A6' },
+  { tag: 'speculative',   label: 'Hand too marginal to continue',  icon: 'minus-circle',   color: '#9B59B6' },
+  { tag: 'board_fear',    label: 'Board hit his range',            icon: 'alert-triangle', color: '#C0392B' },
 ];
 
-export const PREFLOP_REASONING_OPTIONS: { tag: ReasoningTag; label: string; icon: string; color: string }[] = [
-  { tag: 'range_miss',     label: 'Outside my position range',   icon: 'x-circle',     color: '#E74C3C' },
-  { tag: 'range_unknown',  label: "Didn't know my range",        icon: 'help-circle',  color: '#95A5A6' },
-  { tag: 'vs_aggression',  label: 'Facing raise felt too loose', icon: 'shield',       color: '#3498DB' },
-  { tag: 'speculative',    label: 'Hand felt too speculative',   icon: 'shuffle',      color: '#E67E22' },
-  { tag: 'oop_concern',    label: "Didn't want to play OOP",     icon: 'eye-off',      color: '#9B59B6' },
-  { tag: 'stack_mismatch', label: 'Wrong for stack depth',       icon: 'layers',       color: '#1ABC9C' },
+// Shown when hero called, checked, or raised
+export const REASONING_OPTIONS: { tag: ReasoningTag; label: string; icon: string; color: string }[] = [
+  { tag: 'value',       label: 'Value bet / call',             icon: 'dollar-sign',    color: '#27AE60' },
+  { tag: 'protect',     label: 'Protect / deny equity',        icon: 'shield',         color: '#3498DB' },
+  { tag: 'bluff',       label: 'Bluff / semi-bluff',           icon: 'eye-off',        color: '#E67E22' },
+  { tag: 'fold_equity', label: 'Looking for fold equity',      icon: 'trending-up',    color: '#9B59B6' },
+  { tag: 'board_fear',  label: 'Board put me in a tough spot', icon: 'alert-triangle', color: '#E74C3C' },
+  { tag: 'unknown',     label: "Didn't know what to do",       icon: 'help-circle',    color: '#95A5A6' },
 ];
 
 export const MISTAKE_LABELS: Record<MistakeType, string> = {
