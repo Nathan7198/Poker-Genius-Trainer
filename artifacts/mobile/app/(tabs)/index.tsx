@@ -14,12 +14,13 @@ import ActionPanel from '@/components/ActionPanel';
 import CoachModal from '@/components/CoachModal';
 import HandReportModal from '@/components/HandReportModal';
 import CustomSetup from '@/components/CustomSetup';
+import ReasoningModal from '@/components/ReasoningModal';
 import {
   DIFFICULTIES, DIFFICULTY_DESCRIPTIONS, getHandNotation,
   evaluateMadeHand, MADE_HAND_COLORS, PREFLOP_ORDER, PLAYER_TYPE_INFO,
   POSITION_COLORS, getPositionsForSize,
 } from '@/constants/pokerData';
-import type { Difficulty, PlayerType } from '@/constants/pokerData';
+import type { Difficulty, PlayerType, ReasoningTag } from '@/constants/pokerData';
 import MathPanel from '@/components/MathPanel';
 
 const SUIT_SYMBOLS: Record<string, string> = { s: '♠', h: '♥', d: '♦', c: '♣' };
@@ -90,7 +91,7 @@ function TableSetupPanel({ colors, state, setMathPlayerType, liveHand }: {
 
 export default function PlayScreen() {
   const { state, startNewHand, setDifficulty, setTrainingMode, setMathBotStyle, setMathPlayerType, setTableSize, setGameFormat, goIdle, advanceBlindLevel } = useGame();
-  const { logHandHistory, recordHandResult } = useStats();
+  const { logHandHistory, attachReasoning, recordHandResult } = useStats();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const [showDifficultyPicker, setShowDifficultyPicker] = React.useState(false);
@@ -98,6 +99,7 @@ export default function PlayScreen() {
   const [showTablePicker, setShowTablePicker] = React.useState(false);
   const [showFormatPicker, setShowFormatPicker] = React.useState(false);
   const [showSeatsPicker, setShowSeatsPicker] = React.useState(false);
+  const [showReasoningModal, setShowReasoningModal] = React.useState(false);
   const [expandCustomSizes, setExpandCustomSizes] = React.useState(false);
   const [showHandReport, setShowHandReport] = React.useState(false);
   const isPreflopMode = state.trainingMode === 'preflop';
@@ -225,6 +227,11 @@ export default function PlayScreen() {
   function handleNewHand() {
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
+    }
+    // Show reasoning modal before starting the next hand if a hand was just completed
+    if (state.phase === 'showdown' && lastLoggedHand.current > 0) {
+      setShowReasoningModal(true);
+      return;
     }
     startNewHand();
     setShowDifficultyPicker(false);
@@ -887,6 +894,14 @@ export default function PlayScreen() {
       <ActionPanel />
       <CoachModal />
       <HandReportModal visible={showHandReport} onClose={() => setShowHandReport(false)} />
+      <ReasoningModal
+        visible={showReasoningModal}
+        onSelect={(tag: ReasoningTag | null) => {
+          setShowReasoningModal(false);
+          if (tag !== null) attachReasoning(lastLoggedHand.current, tag);
+          startNewHand();
+        }}
+      />
     </View>
   );
 }

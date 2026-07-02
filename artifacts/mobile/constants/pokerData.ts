@@ -379,6 +379,18 @@ export const STRENGTH_COLORS: Record<HandStrength, string> = {
 
 export type MistakeType = 'folded_too_tight'|'called_too_loose'|'bad_sizing'|'ignored_pot_odds'|'bad_bluff'|'missed_value'|'limp_utg';
 
+// ── Post-hand reasoning capture ──────────────────────────────────────────────
+export type ReasoningTag = 'protect' | 'value' | 'bluff' | 'unknown' | 'fold_equity' | 'board_fear';
+
+export const REASONING_OPTIONS: { tag: ReasoningTag; label: string; icon: string; color: string }[] = [
+  { tag: 'protect',     label: 'Protect my hand',               icon: 'shield',          color: '#3498DB' },
+  { tag: 'value',       label: 'Value',                         icon: 'dollar-sign',     color: '#27AE60' },
+  { tag: 'bluff',       label: 'Bluff',                         icon: 'eye-off',         color: '#E67E22' },
+  { tag: 'unknown',     label: "Didn't know",                   icon: 'help-circle',     color: '#95A5A6' },
+  { tag: 'fold_equity', label: 'Thought villain folds too much', icon: 'trending-up',    color: '#9B59B6' },
+  { tag: 'board_fear',  label: 'Thought board favoured him',    icon: 'alert-triangle',  color: '#E74C3C' },
+];
+
 export const MISTAKE_LABELS: Record<MistakeType, string> = {
   folded_too_tight: 'Folding Too Tight',
   called_too_loose: 'Calling Too Loose',

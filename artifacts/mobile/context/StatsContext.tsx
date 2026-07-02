@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { MistakeType, MISTAKE_LABELS, MISTAKE_TIPS, Position } from '@/constants/pokerData';
+import { MistakeType, MISTAKE_LABELS, MISTAKE_TIPS, Position, ReasoningTag } from '@/constants/pokerData';
 
 export interface MistakeEntry {
   id: string;
@@ -40,6 +40,15 @@ export interface HandHistoryEntry {
   folded: boolean;
   foldedStreet: string;
   totalMistakes: number;
+  reasoning?: ReasoningTag;
+}
+
+export interface PlayerPattern {
+  id: string;
+  headline: string;
+  detail: string;
+  evidence: string;
+  severity: 'high' | 'medium' | 'low';
 }
 
 interface StatsState {
@@ -54,10 +63,12 @@ interface StatsContextType {
   stats: StatsState;
   logMistake: (type: MistakeType, description: string, handNum: number) => void;
   logHandHistory: (entry: HandHistoryEntry) => void;
+  attachReasoning: (handNumber: number, reasoning: ReasoningTag) => void;
   recordHandResult: (won: boolean, profitBB: number) => void;
   clearMistakes: () => void;
   getAlerts: () => Alert[];
   getMistakeCount: (type: MistakeType) => number;
+  getProfile: () => PlayerPattern[];
 }
 
 const defaultStats: StatsState = {
@@ -123,6 +134,128 @@ export function StatsProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  const attachReasoning = useCallback((handNumber: number, reasoning: ReasoningTag) => {
+    setStats(prev => {
+      const idx = prev.handHistory.findIndex(h => h.handNumber === handNumber);
+      if (idx === -1) return prev;
+      const updated = [...prev.handHistory];
+      updated[idx] = { ...updated[idx], reasoning };
+      const next: StatsState = { ...prev, handHistory: updated };
+      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+  }, []);
+
+  const getProfile = useCallback((): PlayerPattern[] => {
+    const history = stats.handHistory.filter(h => h.reasoning !== undefined);
+    if (history.length < 5) return [];
+    const all = stats.handHistory;
+    const patterns: PlayerPattern[] = [];
+
+    // Overvalue made hands
+    const valuePlays = history.filter(h => h.reasoning === 'value');
+    const valueMistakes = valuePlays.filter(h => h.totalMistakes > 0);
+    if (valuePlays.length >= 3 && valueMistakes.length / valuePlays.length > 0.5) {
+      patterns.push({
+        id: 'overvalue',
+        headline: 'Overvalue top pair',
+        detail: 'You bet/call for value when the strength of your hand doesn\'t justify it vs. the range you face.',
+        evidence: `${valueMistakes.length} of ${valuePlays.length} "value" decisions had GTO mistakes`,
+        severity: valueMistakes.length / valuePlays.length > 0.7 ? 'high' : 'medium',
+      });
+    }
+
+    // Bluff wrong spots
+    const bluffPlays = history.filter(h => h.reasoning === 'bluff');
+    const bluffMistakes = bluffPlays.filter(h => h.totalMistakes > 0);
+    if (bluffPlays.length >= 3 && bluffMistakes.length / bluffPlays.length > 0.5) {
+      const pairedBluffs = bluffMistakes.filter(h => h.boardTexture.toLowerCase().includes('pair'));
+      if (pairedBluffs.length >= 2) {
+        patterns.push({
+          id: 'paired_bluff',
+          headline: 'Bluff too often on paired boards',
+          detail: 'Villain\'s calling range heavily hits pair boards. Bluff frequency here should be near zero unless you have a strong blocker.',
+          evidence: `${pairedBluffs.length} failed bluffs on paired board textures`,
+          severity: 'high',
+        });
+      } else {
+        patterns.push({
+          id: 'overbluff',
+          headline: 'Bluff too often',
+          detail: 'Your bluffs aren\'t finding enough folds. Check board texture, villain type, and your bluff-to-value ratio.',
+          evidence: `${bluffMistakes.length} of ${bluffPlays.length} bluffs had GTO mistakes`,
+          severity: bluffMistakes.length / bluffPlays.length > 0.7 ? 'high' : 'medium',
+        });
+      }
+    }
+
+    // BB defending too tight
+    const bbHands = all.filter(h => h.heroPosition === 'BB');
+    const bbFoldMistakes = bbHands.filter(h => !h.preflopGTO && h.preflopAction === 'fold');
+    if (bbHands.length >= 5 && bbFoldMistakes.length / bbHands.length > 0.2) {
+      patterns.push({
+        id: 'bb_tight',
+        headline: 'Defend the BB too tightly',
+        detail: 'Pot odds mean you should defend ~65% of hands from the BB. Folding too often is a direct chip leak vs. any aggressor.',
+        evidence: `Folded incorrectly in ${bbFoldMistakes.length} of ${bbHands.length} BB spots`,
+        severity: bbFoldMistakes.length / bbHands.length > 0.35 ? 'high' : 'medium',
+      });
+    }
+
+    // Miss river thin value
+    const riverMistakes = all.flatMap(h => h.streets.filter(s => s.street === 'river' && !s.isGTO && (s.action === 'check' || s.action === 'fold')));
+    const protectMistakes = history.filter(h => h.reasoning === 'protect' && h.totalMistakes > 0);
+    if ((riverMistakes.length >= 3 || protectMistakes.length >= 3) && all.length >= 8) {
+      patterns.push({
+        id: 'thin_value',
+        headline: 'Miss river thin value',
+        detail: 'One pair or two pair can be a value bet on the river when villain calls with worse. Checking leaves chips on the table.',
+        evidence: `${riverMistakes.length} river spots checked/folded when GTO says bet`,
+        severity: riverMistakes.length >= 5 ? 'high' : 'medium',
+      });
+    }
+
+    // Under-bluff scare cards / give up too much
+    const boardFear = history.filter(h => h.reasoning === 'board_fear');
+    const boardFearMistakes = boardFear.filter(h => h.totalMistakes > 0);
+    if (boardFear.length >= 3 && boardFearMistakes.length / boardFear.length > 0.5) {
+      patterns.push({
+        id: 'scare_cards',
+        headline: 'Under-bluff scare cards',
+        detail: 'Representing scare cards is often the highest-EV play. Giving up when an ace or flush card appears is exploitable.',
+        evidence: `${boardFearMistakes.length} of ${boardFear.length} "board favoured him" decisions were GTO mistakes`,
+        severity: 'medium',
+      });
+    }
+
+    // Fail to attack capped ranges
+    const foldEquityPlays = history.filter(h => h.reasoning === 'fold_equity');
+    const foldEquityMistakes = foldEquityPlays.filter(h => h.totalMistakes > 0);
+    if (foldEquityPlays.length >= 3 && foldEquityMistakes.length / foldEquityPlays.length > 0.5) {
+      patterns.push({
+        id: 'fold_equity',
+        headline: 'Fail to attack capped ranges',
+        detail: 'You\'re right to look for fold equity but picking the wrong spots. Target opponents who check back the flop — their range is capped.',
+        evidence: `${foldEquityMistakes.length} of ${foldEquityPlays.length} fold-equity plays had GTO mistakes`,
+        severity: 'medium',
+      });
+    }
+
+    // Knowledge gaps
+    const unknownPlays = history.filter(h => h.reasoning === 'unknown');
+    if (history.length >= 8 && unknownPlays.length / history.length > 0.4) {
+      patterns.push({
+        id: 'knowledge_gap',
+        headline: 'Knowledge gaps driving decisions',
+        detail: 'You often act without a clear mental model. Use the GTO Library to study the spots you keep facing — ranges, pot odds, board textures.',
+        evidence: `"Didn\'t know" in ${unknownPlays.length} of ${history.length} hands`,
+        severity: unknownPlays.length / history.length > 0.6 ? 'high' : 'medium',
+      });
+    }
+
+    return patterns.sort((a, b) => ({ high: 0, medium: 1, low: 2 }[a.severity] - ({ high: 0, medium: 1, low: 2 }[b.severity])));
+  }, [stats.handHistory]);
+
   const recordHandResult = useCallback((won: boolean, profitBB: number) => {
     setStats(prev => {
       const next: StatsState = {
@@ -159,7 +292,7 @@ export function StatsProvider({ children }: { children: React.ReactNode }) {
   }, [stats.mistakes]);
 
   return (
-    <StatsContext.Provider value={{ stats, logMistake, logHandHistory, recordHandResult, clearMistakes, getAlerts, getMistakeCount }}>
+    <StatsContext.Provider value={{ stats, logMistake, logHandHistory, attachReasoning, recordHandResult, clearMistakes, getAlerts, getMistakeCount, getProfile }}>
       {children}
     </StatsContext.Provider>
   );
