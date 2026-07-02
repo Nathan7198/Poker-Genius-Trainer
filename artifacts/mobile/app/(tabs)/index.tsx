@@ -91,7 +91,7 @@ function TableSetupPanel({ colors, state, setMathPlayerType, liveHand }: {
 
 export default function PlayScreen() {
   const { state, startNewHand, setDifficulty, setTrainingMode, setMathBotStyle, setMathPlayerType, setTableSize, setGameFormat, goIdle, advanceBlindLevel } = useGame();
-  const { logHandHistory, attachReasoning, recordHandResult } = useStats();
+  const { stats, logHandHistory, attachReasoning, recordHandResult } = useStats();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const [showDifficultyPicker, setShowDifficultyPicker] = React.useState(false);
@@ -897,6 +897,7 @@ export default function PlayScreen() {
       <ReasoningModal
         visible={showReasoningModal}
         heroFolded={heroFolded || !!lastPFLFold}
+        hand={stats.handHistory.find(h => h.handNumber === lastLoggedHand.current)}
         onSelect={(tag: ReasoningTag | null) => {
           setShowReasoningModal(false);
           if (tag !== null) attachReasoning(lastLoggedHand.current, tag);
