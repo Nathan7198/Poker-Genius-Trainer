@@ -380,7 +380,11 @@ export const STRENGTH_COLORS: Record<HandStrength, string> = {
 export type MistakeType = 'folded_too_tight'|'called_too_loose'|'bad_sizing'|'ignored_pot_odds'|'bad_bluff'|'missed_value'|'limp_utg';
 
 // ── Post-hand reasoning capture ──────────────────────────────────────────────
-export type ReasoningTag = 'protect' | 'value' | 'bluff' | 'unknown' | 'fold_equity' | 'board_fear';
+export type ReasoningTag =
+  // postflop decisions
+  | 'protect' | 'value' | 'bluff' | 'unknown' | 'fold_equity' | 'board_fear'
+  // preflop fold reasons
+  | 'range_miss' | 'range_unknown' | 'vs_aggression' | 'speculative' | 'oop_concern' | 'stack_mismatch';
 
 export const REASONING_OPTIONS: { tag: ReasoningTag; label: string; icon: string; color: string }[] = [
   { tag: 'protect',     label: 'Protect my hand',               icon: 'shield',          color: '#3498DB' },
@@ -389,6 +393,15 @@ export const REASONING_OPTIONS: { tag: ReasoningTag; label: string; icon: string
   { tag: 'unknown',     label: "Didn't know",                   icon: 'help-circle',     color: '#95A5A6' },
   { tag: 'fold_equity', label: 'Thought villain folds too much', icon: 'trending-up',    color: '#9B59B6' },
   { tag: 'board_fear',  label: 'Thought board favoured him',    icon: 'alert-triangle',  color: '#E74C3C' },
+];
+
+export const PREFLOP_REASONING_OPTIONS: { tag: ReasoningTag; label: string; icon: string; color: string }[] = [
+  { tag: 'range_miss',     label: 'Outside my position range',   icon: 'x-circle',     color: '#E74C3C' },
+  { tag: 'range_unknown',  label: "Didn't know my range",        icon: 'help-circle',  color: '#95A5A6' },
+  { tag: 'vs_aggression',  label: 'Facing raise felt too loose', icon: 'shield',       color: '#3498DB' },
+  { tag: 'speculative',    label: 'Hand felt too speculative',   icon: 'shuffle',      color: '#E67E22' },
+  { tag: 'oop_concern',    label: "Didn't want to play OOP",     icon: 'eye-off',      color: '#9B59B6' },
+  { tag: 'stack_mismatch', label: 'Wrong for stack depth',       icon: 'layers',       color: '#1ABC9C' },
 ];
 
 export const MISTAKE_LABELS: Record<MistakeType, string> = {

@@ -81,6 +81,7 @@ const defaultStats: StatsState = {
 
 const StatsContext = createContext<StatsContextType | null>(null);
 const STORAGE_KEY = '@poker_stats_v3';
+const PREFLOP_TAGS = new Set(['range_miss', 'range_unknown', 'vs_aggression', 'speculative', 'oop_concern', 'stack_mismatch']);
 const MAX_HISTORY = 20;
 
 export function StatsProvider({ children }: { children: React.ReactNode }) {
@@ -152,8 +153,11 @@ export function StatsProvider({ children }: { children: React.ReactNode }) {
     const all = stats.handHistory;
     const patterns: PlayerPattern[] = [];
 
+    const postflopHistory = history.filter(h => !PREFLOP_TAGS.has(h.reasoning!));
+    const preflopHistory  = history.filter(h =>  PREFLOP_TAGS.has(h.reasoning!));
+
     // Overvalue made hands
-    const valuePlays = history.filter(h => h.reasoning === 'value');
+    const valuePlays = postflopHistory.filter(h => h.reasoning === 'value');
     const valueMistakes = valuePlays.filter(h => h.totalMistakes > 0);
     if (valuePlays.length >= 3 && valueMistakes.length / valuePlays.length > 0.5) {
       patterns.push({
@@ -166,7 +170,7 @@ export function StatsProvider({ children }: { children: React.ReactNode }) {
     }
 
     // Bluff wrong spots
-    const bluffPlays = history.filter(h => h.reasoning === 'bluff');
+    const bluffPlays = postflopHistory.filter(h => h.reasoning === 'bluff');
     const bluffMistakes = bluffPlays.filter(h => h.totalMistakes > 0);
     if (bluffPlays.length >= 3 && bluffMistakes.length / bluffPlays.length > 0.5) {
       const pairedBluffs = bluffMistakes.filter(h => h.boardTexture.toLowerCase().includes('pair'));
@@ -204,7 +208,7 @@ export function StatsProvider({ children }: { children: React.ReactNode }) {
 
     // Miss river thin value
     const riverMistakes = all.flatMap(h => h.streets.filter(s => s.street === 'river' && !s.isGTO && (s.action === 'check' || s.action === 'fold')));
-    const protectMistakes = history.filter(h => h.reasoning === 'protect' && h.totalMistakes > 0);
+    const protectMistakes = postflopHistory.filter(h => h.reasoning === 'protect' && h.totalMistakes > 0);
     if ((riverMistakes.length >= 3 || protectMistakes.length >= 3) && all.length >= 8) {
       patterns.push({
         id: 'thin_value',
@@ -216,7 +220,7 @@ export function StatsProvider({ children }: { children: React.ReactNode }) {
     }
 
     // Under-bluff scare cards / give up too much
-    const boardFear = history.filter(h => h.reasoning === 'board_fear');
+    const boardFear = postflopHistory.filter(h => h.reasoning === 'board_fear');
     const boardFearMistakes = boardFear.filter(h => h.totalMistakes > 0);
     if (boardFear.length >= 3 && boardFearMistakes.length / boardFear.length > 0.5) {
       patterns.push({
@@ -229,7 +233,7 @@ export function StatsProvider({ children }: { children: React.ReactNode }) {
     }
 
     // Fail to attack capped ranges
-    const foldEquityPlays = history.filter(h => h.reasoning === 'fold_equity');
+    const foldEquityPlays = postflopHistory.filter(h => h.reasoning === 'fold_equity');
     const foldEquityMistakes = foldEquityPlays.filter(h => h.totalMistakes > 0);
     if (foldEquityPlays.length >= 3 && foldEquityMistakes.length / foldEquityPlays.length > 0.5) {
       patterns.push({
@@ -241,15 +245,68 @@ export function StatsProvider({ children }: { children: React.ReactNode }) {
       });
     }
 
-    // Knowledge gaps
-    const unknownPlays = history.filter(h => h.reasoning === 'unknown');
-    if (history.length >= 8 && unknownPlays.length / history.length > 0.4) {
+    // Knowledge gaps (postflop)
+    const unknownPlays = postflopHistory.filter(h => h.reasoning === 'unknown');
+    if (postflopHistory.length >= 8 && unknownPlays.length / postflopHistory.length > 0.4) {
       patterns.push({
         id: 'knowledge_gap',
         headline: 'Knowledge gaps driving decisions',
         detail: 'You often act without a clear mental model. Use the GTO Library to study the spots you keep facing — ranges, pot odds, board textures.',
-        evidence: `"Didn\'t know" in ${unknownPlays.length} of ${history.length} hands`,
-        severity: unknownPlays.length / history.length > 0.6 ? 'high' : 'medium',
+        evidence: `"Didn\'t know" in ${unknownPlays.length} of ${postflopHistory.length} hands`,
+        severity: unknownPlays.length / postflopHistory.length > 0.6 ? 'high' : 'medium',
+      });
+    }
+
+    // --- Preflop patterns ---
+
+    // Preflop range too tight (folded hands that were GTO opens)
+    const rangeMissFolds = preflopHistory.filter(h => h.reasoning === 'range_miss');
+    const rangeMissMistakes = rangeMissFolds.filter(h => !h.preflopGTO);
+    if (rangeMissFolds.length >= 3 && rangeMissMistakes.length / rangeMissFolds.length > 0.4) {
+      patterns.push({
+        id: 'range_too_tight',
+        headline: 'Preflop range is too tight',
+        detail: 'You\'re folding hands that are profitable opens for your position. Study GTO opening ranges for each seat.',
+        evidence: `${rangeMissMistakes.length} of ${rangeMissFolds.length} "outside range" folds were actually GTO opens`,
+        severity: rangeMissMistakes.length / rangeMissFolds.length > 0.6 ? 'high' : 'medium',
+      });
+    }
+
+    // Folds too tight vs aggression
+    const aggrFolds = preflopHistory.filter(h => h.reasoning === 'vs_aggression');
+    const aggrMistakes = aggrFolds.filter(h => !h.preflopGTO);
+    if (aggrFolds.length >= 3 && aggrMistakes.length / aggrFolds.length > 0.5) {
+      patterns.push({
+        id: 'tight_vs_aggression',
+        headline: 'Folds too tight facing raises',
+        detail: 'Many hands remain profitable calls or 3-bets against a standard open. Check your defend/3-bet frequencies by position.',
+        evidence: `${aggrMistakes.length} of ${aggrFolds.length} folds vs aggression were GTO mistakes`,
+        severity: 'medium',
+      });
+    }
+
+    // Underplaying speculative hands
+    const specFolds = preflopHistory.filter(h => h.reasoning === 'speculative');
+    const specMistakes = specFolds.filter(h => !h.preflopGTO);
+    if (specFolds.length >= 3 && specMistakes.length / specFolds.length > 0.5) {
+      patterns.push({
+        id: 'underplay_speculative',
+        headline: 'Underplays speculative hands',
+        detail: 'Suited connectors and small pairs have strong implied odds. These hands are often profitable opens at the right position and stack depth.',
+        evidence: `${specMistakes.length} of ${specFolds.length} "too speculative" folds were GTO opens`,
+        severity: 'low',
+      });
+    }
+
+    // Preflop knowledge gap
+    const preflopUnknown = preflopHistory.filter(h => h.reasoning === 'range_unknown');
+    if (preflopHistory.length >= 5 && preflopUnknown.length / preflopHistory.length > 0.4) {
+      patterns.push({
+        id: 'preflop_knowledge_gap',
+        headline: 'Preflop range knowledge gap',
+        detail: 'You often fold without knowing whether the hand was in your range. Use the GTO Library to drill opening ranges by position until they are automatic.',
+        evidence: `"Didn\'t know my range" in ${preflopUnknown.length} of ${preflopHistory.length} preflop folds`,
+        severity: preflopUnknown.length / preflopHistory.length > 0.6 ? 'high' : 'medium',
       });
     }
 
